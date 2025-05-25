@@ -1,8 +1,4 @@
-Here’s an updated version of your README to incorporate the new continuous-space environment, while keeping the structure and tone closely aligned with the original:
-
----
-
-# Welcome to Data Intelligence Challenge-2AMC15!
+# Welcome to Data Intelligence Challenge-2AMC15 Assignment 2!
 
 This is the repository containing the challenge environment code for both grid-world and continuous-space navigation scenarios.
 
@@ -110,6 +106,6 @@ These represent the world in memory:
 * `Grid`: discrete 2D arrays
 * `ContinuousSpace`: width, height, table radius, and table locations
 
-#### `gui.py`
+<!-- #### `gui.py`
 
-Handles visualizations via PyGame. Works for both environments. GUI can be turned off with `--no_gui` during training for speed.
+Handles visualizations via PyGame. Works for both environments. GUI can be turned off with `--no_gui` during training for speed. -->
