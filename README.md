@@ -1,108 +1,115 @@
+Here’s an updated version of your README to incorporate the new continuous-space environment, while keeping the structure and tone closely aligned with the original:
 
-Welcome to Data Intelligence Challenge-2AMC15!
-This is the repository containing the challenge environment code.
+---
+
+# Welcome to Data Intelligence Challenge-2AMC15!
+
+This is the repository containing the challenge environment code for both grid-world and continuous-space navigation scenarios.
+
+---
 
 ## Quickstart
 
-1. Create a virtual environment for this course with Python >= 3.10. Using conda, you can do: `conda create -n dic2025 python=3.11`. Use `conda activate dic2025` to activate it `conda deactivate` to deactivate it.
-2. Clone this repository into the local directory you prefer `git clone https://github.com/DataIntelligenceChallenge/2AMC15-2025.git`.
-3. Install the required packages `pip install -r requirements.txt`. Now, you are ready to use the simulation environment! :partying_face:	
-4. Run `$ python train.py grid_configs/example_grid.npy` to start training!
+1. Create a virtual environment with Python ≥ 3.10 (we recommend 3.11):
+   `conda create -n dic2025_2 python=3.11`
+   Then activate it:
+   `conda activate dic2025_2`
+2. Clone the repository (or download it):
+   `git clone https://github.com/AdminMas7er/2AMC15_Assignment2_2025.git`
+3. Install dependencies:
+   `pip install -r requirements.txt`
+4. Run the grid-world training script:
+   `python train.py --agent random_agent --restaurant grid_configs/my_first_restaurant.npz`
 
-`train.py` is just an example training script. Inside this file, initialize the agent you want to train and evaluate. Feel free to modify it as necessary. Its usage is:
+---
+
+## Training in Continuous Environments
+
+You can also now train agents in continuous 2D restaurant environments using the new continuous space simulation:
+
+1. First, create a restaurant space interactively:
+   `python continuous_space_creator_web.py`
+   Then go to [127.0.0.1:5000](http://127.0.0.1:5000) or http://localhost:5000 to place tables and export your layout as `.npz`.
+
+2. Run training or testing on the saved `.npz` space:
+
+   ```bash
+   python train.py --agent random_agent --restaurant grid_configs/my_first_restaurant.npz --iter 500
+   ```
+
+### train.py usage for continuous space:
 
 ```bash
-usage: train.py [-h] [--no_gui] [--sigma SIGMA] [--fps FPS] [--iter ITER]
-                [--random_seed RANDOM_SEED] 
-                GRID [GRID ...]
+usage: train.py --agent AGENT --restaurant RESTAURANT [--iter ITER]
+                [--no_gui] [--seed SEED]
 
-DIC Reinforcement Learning Trainer.
+Train agent in a continuous restaurant space.
 
-positional arguments:
-  GRID                  Paths to the grid file to use. There can be more than
-                        one.
 options:
-  -h, --help                 show this help message and exit
-  --no_gui                   Disables rendering to train faster (boolean)
-  --sigma SIGMA              Sigma value for the stochasticity of the environment. (float, default=0.1, should be in [0, 1])
-  --fps FPS                  Frames per second to render at. Only used if no_gui is not set. (int, default=30)
-  --iter ITER                Number of iterations to go through. Should be integer. (int, default=1000)
-  --random_seed RANDOM_SEED  Random seed value for the environment. (int, default=0)
+  --agent AGENT           Name of the agent module (e.g., random_agent)
+  --restaurant RESTAURANT Path to the .npz restaurant layout
+  --iter ITER             Number of iterations (default: 1000)
+  --no_gui                Disables GUI rendering
+  --seed SEED             Random seed (default: 42)
 ```
 
-## Code guide
+---
 
-The code is made up of 2 modules: 
-
-1. `agent`
-2. `world`
+## Code Guide
 
 ### The `agent` module
 
-The `agent` module contains the `BaseAgent` class as well as some benchmark agents you may want to test against.
+Contains all RL agents. Each agent must implement at least:
 
-The `BaseAgent` is an abstract class and all RL agents for DIC must inherit from/implement it.
-If you know/understand class inheritence, skip the following section:
+* `take_action(observation)`
+* `update()` (optional for non-learning agents)
 
-#### `BaseAgent` as an abstract class
-Here you can find an explanation about abstract classes [Geeks for Geeks](https://www.geeksforgeeks.org/abstract-classes-in-python/).
-
-Think of this like how all models in PyTorch start like 
-
-```python
-class NewModel(nn.Module):
-    def __init__(self):
-        super().__init__()
-    ...
-```
-
-In this case, `NewModel` inherits from `nn.Module`, which gives it the ability to do back propagation, store parameters, etc. without you having to manually code that every time.
-It also ensures that every class that inherits from `nn.Module` contains _at least_ the `forward()` method, which allows a forward pass to actually happen.
-
-In the case of your RL agent, inheriting from `BaseAgent` guarantees that your agent implements `update()` and `take_action()`.
-This ensures that no matter what RL agent you make and however you code it, the environment and training code can always interact with it in the same way.
-Check out the benchmark agents to see examples.
+See `random_agent.py` for a minimal example in continuous environments.
 
 ### The `world` module
 
-The world module contains:
-1. `grid_creator.py`
-2. `environment.py`
-3. `grid.py`
-4. `gui.py`
+Includes all simulation logic, visualization, and file I/O for both grid and continuous modes.
 
-#### Grid creator
-Run this file to create new grids.
+#### `grid_creator.py`
+
+Run this file to design grid-worlds in your browser:
 
 ```bash
-$ python grid_creator.py
+python grid_creator.py
 ```
 
-This will start up a web server where you create new grids, of different sizes with various elements arrangements.
-To view the grid creator itself, go to `127.0.0.1:5000`.
-All levels will be saved to the `grid_configs/` directory.
+Go to [127.0.0.1:5000](http://127.0.0.1:5000) and design maps using interactive tools. Saved files appear in `grid_configs/`.
 
+#### `continuous_space_creator_web.py`
 
-#### The Environment
+Run this to design restaurant environments in continuous 2D space:
 
-The `Environment` is very important because it contains everything we hold dear, including ourselves [^1].
-It is also the name of the class which our RL agent will act within. Most of the action happens in there.
+```bash
+python continuous_space_creator_web.py
+```
 
-The main interaction with `Environment` is through the methods:
+Then visit [127.0.0.1:5000](http://127.0.0.1:5000) to create your layout.
 
-- `Environment()` to initialize the environment
-- `reset()` to reset the environment
-- `step()` to actually take a time step with the environment
-- `Environment().evaluate_agent()` to evaluate the agent after training.
+#### `environment.py`
 
-[^1]: In case you missed it, this sentence is a joke. Please do not write all your code in the `Environment` class.
+Contains two main environments:
 
-#### The Grid
+* `Environment`: for discrete grid-worlds
+* `ContinuousEnvironment`: for continuous delivery tasks with sensors and physics
 
-The `Grid` class is the the actual representation of the world on which the agent moves. It is a 2D Numpy array.
+Both provide:
 
-#### The GUI
+* `reset()` to start a new episode
+* `step(action)` to take an action and get the next state
+* `evaluate_agent()` to test trained policies
 
-The Graphical User Interface provides a way for you to actually see what the RL agent is doing.
-While performant and written using PyGame, it is still about 1300x slower than not running a GUI.
-Because of this, we recommend using it only while testing/debugging and not while training.
+#### `grid.py` and `continuous_space.py`
+
+These represent the world in memory:
+
+* `Grid`: discrete 2D arrays
+* `ContinuousSpace`: width, height, table radius, and table locations
+
+#### `gui.py`
+
+Handles visualizations via PyGame. Works for both environments. GUI can be turned off with `--no_gui` during training for speed.
