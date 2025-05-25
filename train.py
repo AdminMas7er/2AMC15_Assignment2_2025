@@ -21,12 +21,15 @@ except ModuleNotFoundError:
 
 def parse_args():
     parser = ArgumentParser(description="Train agent in a continuous restaurant space")
-    parser.add_argument("--agent", type=str, required=True, help="Name of the agent module (e.g., random_agent)")
-    parser.add_argument("--restaurant", type=Path, required=True, help="Path to .npz restaurant layout")
+    parser.add_argument("--agent", type=str, default="random_agent", 
+                        help="Name of the agent module (default: random_agent)")
+    parser.add_argument("--restaurant", type=Path, default=Path("grid_configs/my_first_restaurant.npz"),
+                        help="Path to the .npz restaurant layout (default: my_first_restaurant.npz)")
     parser.add_argument("--iter", type=int, default=1000, help="Number of iterations")
     parser.add_argument("--no_gui", action="store_true", help="Disable GUI")
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
     return parser.parse_args()
+
 
 def main():
     args = parse_args()
