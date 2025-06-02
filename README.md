@@ -24,7 +24,7 @@ This is the repository containing the challenge environment code for both grid-w
 You can also now train agents in continuous 2D restaurant environments using the new continuous space simulation:
 
 1. First, create a restaurant space interactively:
-   `python continuous_space_creator_web.py`
+   `python world/restaurant_creator_localhost.py`
    Then go to [127.0.0.1:5000](http://127.0.0.1:5000) or http://localhost:5000 to place tables and export your layout as `.npz`.
 
 2. Run training or testing on the saved `.npz` space:
