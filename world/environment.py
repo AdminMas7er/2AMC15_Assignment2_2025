@@ -97,7 +97,7 @@ class ContinuousEnvironment:
             reward = 1.0  # Reward for picking up
 
         # If agent reaches the delivery table
-        elif self.has_order and np.linalg.norm(self.agent_pos - self.current_target_table) < self.table_radius:
+        elif self.has_order and np.linalg.norm(self.agent_pos - self.current_target_table) < self.table_radius * 1.5:
             self.has_order = False
             self.current_target_table = None
             reward = 5.0  # Reward for delivery
