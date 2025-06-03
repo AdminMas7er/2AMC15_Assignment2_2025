@@ -2,6 +2,7 @@ import numpy as np
 import math
 import random
 import pygame
+import time
 from pygame import gfxdraw
 from pathlib import Path
 from world.continuous_space import ContinuousSpace  # if not already imported
@@ -21,6 +22,10 @@ class ContinuousEnvironment:
             self.height = space.height
             self.tables = space.tables
             self.table_radius = space.table_radius
+            self.pickup_point = space.pickup_point
+            self.has_order = False
+            self.current_target_table = None
+
         else:
             # Use defaults (for random generation/testing)
             self.width = width
@@ -35,6 +40,10 @@ class ContinuousEnvironment:
         self.enable_gui = enable_gui
         self.window = None
         self.screen_scale = 50
+
+        self.episode_start_time = time.time()
+        self.steps_taken = 0
+        self.cumulative_reward = 0.0
 
         if self.enable_gui:
             import pygame
@@ -56,6 +65,11 @@ class ContinuousEnvironment:
     def reset(self, pos=(1.0, 1.0), angle=0.0):
         self.agent_pos = np.array(pos)
         self.agent_angle = angle
+        self.has_order = False
+        self.current_target_table = None
+        self.episode_start_time = time.time()
+        self.steps_taken = 0
+        self.cumulative_reward = 0.0
         return self._get_observation()
 
     def step(self, action):
@@ -73,7 +87,31 @@ class ContinuousEnvironment:
         if self.enable_gui:
             self._render(obs)
 
-        return obs
+        reward = -0.01  # Small negative step cost
+        done = False
+
+        # If agent reaches the pickup point
+        if not self.has_order and np.linalg.norm(self.agent_pos - self.pickup_point) < 0.3:
+            self.has_order = True
+            self.current_target_table = random.choice(self.tables)
+            reward = 1.0  # Reward for picking up
+
+        # If agent reaches the delivery table
+        elif self.has_order and np.linalg.norm(self.agent_pos - self.current_target_table) < self.table_radius * 1.5:
+            self.has_order = False
+            self.current_target_table = None
+            reward = 5.0  # Reward for delivery
+            done = True  # Optional
+
+        self.steps_taken += 1
+        self.cumulative_reward += reward
+
+        obs = self._get_observation()
+        if self.enable_gui:
+            self._render(obs)
+
+        return obs, reward, done
+
 
     def _is_valid_position(self, pos):
         """Collission detection for whether the agent walks into a table or outside of the map,
@@ -100,7 +138,10 @@ class ContinuousEnvironment:
             "agent_pos": self.agent_pos.copy(),
             "agent_angle": self.agent_angle,
             "sensor_distances": distances,
-            "target_tables": self.tables.copy()
+            "target_tables": self.tables.copy(),
+            "pickup_point": self.pickup_point,
+            "has_order": self.has_order,
+            "current_target_table": self.current_target_table,
         }
 
     def _render(self, obs):
@@ -115,6 +156,9 @@ class ContinuousEnvironment:
                 self.window, TABLE_COLOR,
                 to_px(table), int(self.table_radius * self.screen_scale)
             )
+
+        # Draw pickup point
+        pygame.draw.circle(self.window, (0, 255, 0), to_px(self.pickup_point), 8)
 
         # Draw agent
         agent_px = to_px(obs["agent_pos"])
@@ -132,8 +176,30 @@ class ContinuousEnvironment:
                 agent_px, to_px(sensor_end), 1
             )
 
+        # Draw metrics on the right
+        font = pygame.font.SysFont("Arial", 16)
+        panel_width = 200
+        panel_rect = pygame.Rect(WINDOW_SIZE[0] - panel_width, 0, panel_width, 100)
+        pygame.draw.rect(self.window, (240, 240, 240), panel_rect)
+
+        elapsed_time = time.time() - self.episode_start_time
+
+        def draw_text(text, x, y):
+            label = font.render(text, True, (0, 0, 0))
+            self.window.blit(label, (x, y))
+
+        draw_text(f"Time: {elapsed_time:.1f}s", WINDOW_SIZE[0] - panel_width + 10, 10)
+        draw_text(f"Steps: {self.steps_taken}", WINDOW_SIZE[0] - panel_width + 10, 30)
+        draw_text(f"Reward: {self.cumulative_reward:.2f}", WINDOW_SIZE[0] - panel_width + 10, 50)
+
+
         pygame.display.flip()
         pygame.time.delay(50)
+
+    @staticmethod
+    def _default_reward_function(obs):
+        """A simple reward function that gives a positive reward for being close to the table which got an order."""
+        
 
     def close(self):
         if self.enable_gui:

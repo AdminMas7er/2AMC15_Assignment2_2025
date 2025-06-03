@@ -32,7 +32,7 @@ socket_io = SocketIO(app)
 
 @app.route('/')
 def home():
-    return render_template("restaurant_editor.html")
+    return render_template("restaurant_editor_pickup.html")
 
 @app.route('/build_space')
 def build_space():
@@ -42,6 +42,7 @@ def build_space():
         height: float
         table_radius: float
         tables: list of (x, y) positions
+        pickup_point: (x, y)
         name: filename to save under
         save: 'true' or 'false'
     """
@@ -49,10 +50,13 @@ def build_space():
     height = float(request.args.get("height"))
     table_radius = float(request.args.get("table_radius"))
     tables = ast.literal_eval(request.args.get("tables"))
+    pickup = request.args.get("pickup_point")
     name = str(request.args.get("name"))
     to_save = request.args.get("save", "false").lower() == "true"
 
     tables_np = [np.array(t) for t in tables]
+    pickup_point = np.array(ast.literal_eval(pickup)) if pickup else None
+
     space = ContinuousSpace(width, height, tables_np, table_radius)
 
     if to_save and len(name) > 0:
