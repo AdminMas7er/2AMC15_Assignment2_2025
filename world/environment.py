@@ -21,6 +21,10 @@ class ContinuousEnvironment:
             self.height = space.height
             self.tables = space.tables
             self.table_radius = space.table_radius
+            self.pickup_point = space.pickup_point
+            self.has_order = False
+            self.current_target_table = None
+
         else:
             # Use defaults (for random generation/testing)
             self.width = width
@@ -56,6 +60,8 @@ class ContinuousEnvironment:
     def reset(self, pos=(1.0, 1.0), angle=0.0):
         self.agent_pos = np.array(pos)
         self.agent_angle = angle
+        self.has_order = False
+        self.current_target_table = None
         return self._get_observation()
 
     def step(self, action):
@@ -73,7 +79,28 @@ class ContinuousEnvironment:
         if self.enable_gui:
             self._render(obs)
 
-        return obs
+        reward = -0.01  # Small negative step cost
+        done = False
+
+        # If agent reaches the pickup point
+        if not self.has_order and np.linalg.norm(self.agent_pos - self.pickup_point) < 0.3:
+            self.has_order = True
+            self.current_target_table = random.choice(self.tables)
+            reward = 1.0  # Reward for picking up
+
+        # If agent reaches the delivery table
+        elif self.has_order and np.linalg.norm(self.agent_pos - self.current_target_table) < self.table_radius:
+            self.has_order = False
+            self.current_target_table = None
+            reward = 5.0  # Reward for delivery
+            done = True  # Optional
+
+        obs = self._get_observation()
+        if self.enable_gui:
+            self._render(obs)
+
+        return obs, reward, done
+
 
     def _is_valid_position(self, pos):
         """Collission detection for whether the agent walks into a table or outside of the map,
@@ -100,7 +127,10 @@ class ContinuousEnvironment:
             "agent_pos": self.agent_pos.copy(),
             "agent_angle": self.agent_angle,
             "sensor_distances": distances,
-            "target_tables": self.tables.copy()
+            "target_tables": self.tables.copy(),
+            "pickup_point": self.pickup_point,
+            "has_order": self.has_order,
+            "current_target_table": self.current_target_table,
         }
 
     def _render(self, obs):
@@ -115,6 +145,9 @@ class ContinuousEnvironment:
                 self.window, TABLE_COLOR,
                 to_px(table), int(self.table_radius * self.screen_scale)
             )
+
+        # Draw pickup point
+        pygame.draw.circle(self.window, (0, 255, 0), to_px(self.pickup_point), 8)
 
         # Draw agent
         agent_px = to_px(obs["agent_pos"])
@@ -134,6 +167,11 @@ class ContinuousEnvironment:
 
         pygame.display.flip()
         pygame.time.delay(50)
+
+    @staticmethod
+    def _default_reward_function(obs):
+        """A simple reward function that gives a positive reward for being close to the table which got an order."""
+        
 
     def close(self):
         if self.enable_gui:
