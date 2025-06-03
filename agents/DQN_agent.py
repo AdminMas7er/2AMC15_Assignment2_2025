@@ -9,7 +9,7 @@ import torch.optim as optim
 
 class DQN(nn.Module): #nn.Module is like a base class/template for neural networks
     def __init__(self, input_dim, output_dim):
-        super(DQN, self).__init__()
+        super().__init__()
         self.fc1 = nn.Linear(input_dim, 128)
         self.fc2 = nn.Linear(128, 128)
         self.fc3 = nn.Linear(128, output_dim)
@@ -39,7 +39,7 @@ class DQNAgent:
         self.learning_rate = 0.001
 
         #Initialize Q-networks
-        self.input_dim =
+        # self.input_dim =
         self.output_dim = len(self.actions) #the amount of possible actions using the set discretization action bins
         self.model_net = DQN(self.input_dim, self.output_dim)
         self.target_net = DQN(self.input_dim, self.output_dim) #This helps DQN for stability
@@ -59,10 +59,16 @@ class DQNAgent:
         return torch.tensor(vec, dtype=torch.float32).unsqueeze(0)
 
     def take_action(self, observation):
-        # Random linear and angular velocities
-        speed = random.uniform(0, self.max_speed)
-        rotation = random.uniform(-self.max_turn, self.max_turn)
-        return (speed, rotation)
+        if np.random.rand() < self.epsilon: #Exploration
+            return random.choice(self.actions)
+        else: #Exploitation
+            with torch.no_grad():
+                state = self._obs_to_tensor(observation)
+                q_values = self.model_net(state)
+                action_index = torch.argmax(q_values).item()
+                return self.actions[action_index]
+
+
 
     def train(self):
         if len(self.memory) < self.batch_size:
