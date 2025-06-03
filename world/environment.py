@@ -2,6 +2,7 @@ import numpy as np
 import math
 import random
 import pygame
+import time
 from pygame import gfxdraw
 from pathlib import Path
 from world.continuous_space import ContinuousSpace  # if not already imported
@@ -40,6 +41,10 @@ class ContinuousEnvironment:
         self.window = None
         self.screen_scale = 50
 
+        self.episode_start_time = time.time()
+        self.steps_taken = 0
+        self.cumulative_reward = 0.0
+
         if self.enable_gui:
             import pygame
             pygame.init()
@@ -62,6 +67,9 @@ class ContinuousEnvironment:
         self.agent_angle = angle
         self.has_order = False
         self.current_target_table = None
+        self.episode_start_time = time.time()
+        self.steps_taken = 0
+        self.cumulative_reward = 0.0
         return self._get_observation()
 
     def step(self, action):
@@ -94,6 +102,9 @@ class ContinuousEnvironment:
             self.current_target_table = None
             reward = 5.0  # Reward for delivery
             done = True  # Optional
+
+        self.steps_taken += 1
+        self.cumulative_reward += reward
 
         obs = self._get_observation()
         if self.enable_gui:
@@ -164,6 +175,23 @@ class ContinuousEnvironment:
                 self.window, SENSOR_COLOR,
                 agent_px, to_px(sensor_end), 1
             )
+
+        # Draw metrics on the right
+        font = pygame.font.SysFont("Arial", 16)
+        panel_width = 200
+        panel_rect = pygame.Rect(WINDOW_SIZE[0] - panel_width, 0, panel_width, 100)
+        pygame.draw.rect(self.window, (240, 240, 240), panel_rect)
+
+        elapsed_time = time.time() - self.episode_start_time
+
+        def draw_text(text, x, y):
+            label = font.render(text, True, (0, 0, 0))
+            self.window.blit(label, (x, y))
+
+        draw_text(f"Time: {elapsed_time:.1f}s", WINDOW_SIZE[0] - panel_width + 10, 10)
+        draw_text(f"Steps: {self.steps_taken}", WINDOW_SIZE[0] - panel_width + 10, 30)
+        draw_text(f"Reward: {self.cumulative_reward:.2f}", WINDOW_SIZE[0] - panel_width + 10, 50)
+
 
         pygame.display.flip()
         pygame.time.delay(50)
