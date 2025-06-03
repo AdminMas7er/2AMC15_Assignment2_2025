@@ -145,17 +145,25 @@ class ContinuousEnvironment:
         }
 
     def _render(self, obs):
+        font = pygame.font.SysFont("Arial", 16)
+
         self.window.fill(BACKGROUND_COLOR)
 
         def to_px(pos):
             return int(pos[0] * self.screen_scale), int(self.height * self.screen_scale - pos[1] * self.screen_scale)
 
         # Draw tables
-        for table in obs["target_tables"]:
+        for idx, table in enumerate(obs["target_tables"]):
+            px_pos = to_px(table)
             pygame.draw.circle(
                 self.window, TABLE_COLOR,
-                to_px(table), int(self.table_radius * self.screen_scale)
+                px_pos, int(self.table_radius * self.screen_scale)
             )
+
+            # Draw table number at center
+            label = font.render(str(idx + 1), True, (255, 255, 255))  # White text
+            label_rect = label.get_rect(center=px_pos)
+            self.window.blit(label, label_rect)
 
         # Draw pickup point
         pygame.draw.circle(self.window, (0, 255, 0), to_px(self.pickup_point), 8)
@@ -177,7 +185,6 @@ class ContinuousEnvironment:
             )
 
         # Draw metrics on the right
-        font = pygame.font.SysFont("Arial", 16)
         panel_width = 200
         panel_rect = pygame.Rect(WINDOW_SIZE[0] - panel_width, 0, panel_width, 100)
         pygame.draw.rect(self.window, (240, 240, 240), panel_rect)
