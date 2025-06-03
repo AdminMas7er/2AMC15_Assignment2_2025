@@ -10,8 +10,6 @@ class ReplayBuffer:
         self.currentSize = 0
 
     def store(self, state, action, reward, next_state):
-        print(self.index)
-        print(self.buffer)
         self.buffer[self.index] = (state, action, reward, next_state)
         self.index = (self.index + 1) % self.size
         self.currentSize += 1
