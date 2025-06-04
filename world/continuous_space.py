@@ -18,12 +18,20 @@ class ContinuousSpace:
             "tables": np.array(self.tables),
         }
 
-    def save(self, fp: Path):
+    def save(self, fp):
+        """Save the continuous space to a file"""
+        # Convert to Path object if it's a string
+        if isinstance(fp, str):
+            fp = Path(fp)
         data = self.to_dict()
         np.savez(fp.with_suffix(".npz"), **data)
 
     @staticmethod
-    def load(fp: Path) -> "ContinuousSpace":
+    def load(fp) -> "ContinuousSpace":
+        """Load the continuous space from a file"""
+        # Convert to Path object if it's a string
+        if isinstance(fp, str):
+            fp = Path(fp)
         data = np.load(fp.with_suffix(".npz"), allow_pickle=True)
         width = float(data["width"])
         height = float(data["height"])
