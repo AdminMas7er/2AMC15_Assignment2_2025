@@ -9,6 +9,4 @@ class Agent:
 
     def take_action(self, observation):
         # Random linear and angular velocities
-        speed = random.uniform(0, self.max_speed)
-        rotation = random.uniform(-self.max_turn, self.max_turn)
-        return (speed, rotation)
+        return random.randint(0,4)
