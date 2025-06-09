@@ -87,7 +87,7 @@ class ContinuousEnvironment:
         if self.enable_gui:
             self._render(obs)
 
-        reward = -0.01  # Small negative step cost
+        reward -= -0.01  # Small negative step cost
         done = False
 
         # If agent reaches the pickup point

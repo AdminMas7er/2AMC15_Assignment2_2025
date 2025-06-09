@@ -101,7 +101,16 @@ class DeliveryEnvironment:
         
         # Collision detection
         reward = -0.01  # Time penalty
-        
+
+        # Penalize backward movement (action 2)
+        if action == 2:
+            reward -= 0.1  # discourage moving backward
+
+        # Penalize pure rotations (actions 3 and 4)
+        if action in [3, 4]:
+            reward -= 0.05  # discourage endless turning
+
+        # Proceed if valid move:
         if self._is_valid_position(new_pos):
             self.agent_pos = new_pos
             
@@ -112,6 +121,7 @@ class DeliveryEnvironment:
             if distance_to_target < self.table_radius + self.agent_radius + 0.1:
                 reward += 100  # Target reached reward
                 self.done = True
+                print("INFO: Target table reached!")
             else:
                 # Distance reward (encourage approaching target)
                 reward += max(0, 5.0 - distance_to_target) * 0.1
@@ -190,7 +200,13 @@ class DeliveryEnvironment:
             return
             
         self.window.fill((255, 255, 255))
-        
+
+        #This avoids the freezing of the visuals (not responding) window
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                exit()
+
         def to_px(pos):
             return (int(pos[0] * self.screen_scale), 
                    int(self.height * self.screen_scale - pos[1] * self.screen_scale))

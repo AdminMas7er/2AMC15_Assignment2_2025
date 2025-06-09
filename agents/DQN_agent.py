@@ -37,7 +37,7 @@ class DQNAgent:
         self.batch_size = 64
         self.memory_size = 10000
         self.target_update_frequency = 4 # I see very different values used online varying from 4 to 1000 so this should be checked
-        self.learning_rate = 0.001
+        self.learning_rate = 1e-4
 
         #Initialize Q-networks
         self.input_dim = 3 + 2 + 1  # sensor distances (3), agent_pos (2), agent_angle (1)
