@@ -1,14 +1,12 @@
-
 import numpy as np
 import random
-
-from collections import deque
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from replaybuffer import ReplayBuffer
+from .replaybuffer import ReplayBuffer  # relative import
+from world.delivery_environment import DeliveryEnvironment
 
-class DQN(nn.Module): #nn.Module is like a base class/template for neural networks
+class DQN(nn.Module):
     def __init__(self, input_dim, output_dim):
         super().__init__()
         self.fc1 = nn.Linear(input_dim, 128)
@@ -21,66 +19,144 @@ class DQN(nn.Module): #nn.Module is like a base class/template for neural networ
         return self.fc3(x)
 
 class DQNAgent:
-    def __init__(self, action_bins=7):
-        # We will note the hyperparameters and settings below
-        self.max_speed = 0.2
-        self.max_turn = np.radians(30)
-        self.speed_levels = np.linspace(0, self.max_speed, action_bins)
-        self.turn_levels = np.linspace(-self.max_turn, self.max_turn, action_bins)
-        self.actions = [(s, r) for s in self.speed_levels for r in self.turn_levels] #Discretizing actions for the DQN
-
-
+    def __init__(self, state_size, action_size):
         self.gamma = 0.99
         self.epsilon = 1.0
         self.epsilon_decay = 0.995
         self.epsilon_min = 0.01
         self.batch_size = 64
         self.memory_size = 10000
-        self.target_update_frequency = 4 # I see very different values used online varying from 4 to 1000 so this should be checked
+        self.target_update_frequency = 4
         self.learning_rate = 1e-4
 
-        #Initialize Q-networks
-        self.input_dim = 3 + 2 + 1  # sensor distances (3), agent_pos (2), agent_angle (1)
-        self.output_dim = len(self.actions) #the amount of possible actions using the set discretization action bins
-        self.model_net = DQN(self.input_dim, self.output_dim)
-        self.target_net = DQN(self.input_dim, self.output_dim) #This helps DQN for stability
+        self.model_net = DQN(state_size, action_size)
+        self.target_net = DQN(state_size, action_size)
         self.target_net.load_state_dict(self.model_net.state_dict())
         self.target_net.eval()
 
-        self.optimizer = optim.Adam(self.model.parameters(), self.learning_rate) #includes learning rate
-        self.memory = deque(maxlen=self.memory_size)
+        self.optimizer = optim.Adam(self.model_net.parameters(), self.learning_rate)
+        self.memory = ReplayBuffer(self.memory_size, self.batch_size)
+        self.train_step = 0
+        self.action_size = action_size
 
-    def _obs_to_tensor(self, obs):
-        """"Converts an observation into a tensor.??????"""
-        vec = np.concatenate([
-            obs["sensor_distances"],
-            obs["agent_pos"],
-            [obs["agent_angle"]]
-        ])
-        return torch.tensor(vec, dtype=torch.float32).unsqueeze(0)
+    def _state_to_tensor(self, state):
+        return torch.tensor(state, dtype=torch.float32).unsqueeze(0)
 
-    def select_action(self, observation):
-    """Function to choose an action using the epsilon-greedy policy"""
-        if np.random.rand() < self.epsilon: #Exploration
-            return random.choice(self.actions)
-        else: #Exploitation
+    def select_action(self, state):
+        if np.random.rand() < self.epsilon:
+            return random.randint(0, self.action_size - 1)
+        else:
             with torch.no_grad():
-                state = self._obs_to_tensor(observation)
-                q_values = self.model_net(state)
-                action_index = torch.argmax(q_values).item()
-                return self.actions[action_index]
+                state_tensor = self._state_to_tensor(state)
+                q_values = self.model_net(state_tensor)
+                return torch.argmax(q_values).item()
 
-
+    def remember(self, state, action, reward, next_state):
+        self.memory.store(state, action, reward, next_state)
 
     def train(self):
-        if len(self.memory) < self.batch_size:
+        if self.memory.currentSize < self.batch_size:
             return
 
-        batch = random.sample(self.memory, self.batch_size)
-        state_batch, action_batch, reward_batch, next_state_batch, done_batch = zip(*batch)
+        batch = self.memory.sample()
 
-        state_batch = torch.FloatTensor(state_batch)
+        # Filter out any remaining invalid transitions
+        valid_batch = []
+        for trans in batch:
+            s, a, r, ns = trans
+            if (
+                    s is not None and
+                    ns is not None and
+                    isinstance(s, np.ndarray) and
+                    isinstance(ns, np.ndarray) and
+                    s.size > 0 and
+                    ns.size > 0 and
+                    not np.any(np.isnan(s)) and
+                    not np.any(np.isnan(ns))
+            ):
+                valid_batch.append(trans)
+
+        if len(valid_batch) == 0:
+            return
+
+        state_batch, action_batch, reward_batch, next_state_batch = zip(*valid_batch)
+
+        # Debug check — show bad states
+        for i, s in enumerate(state_batch):
+            if s is None or np.any(np.isnan(s)):
+                print(f"WARNING: Bad state at index {i}: {s}")
+        for i, s in enumerate(next_state_batch):
+            if s is None or np.any(np.isnan(s)):
+                print(f"WARNING: Bad next_state at index {i}: {s}")
+
+        state_batch = torch.FloatTensor(np.array(state_batch))
         action_batch = torch.LongTensor(action_batch).unsqueeze(1)
-        reward_batch = torch.FloatTensor(reward_batch)
-        next_state_batch = torch.FloatTensor(next_state_batch)
-        done_batch = torch.FloatTensor(done_batch)
+        reward_batch = torch.FloatTensor(reward_batch).unsqueeze(1)
+        next_state_batch = torch.FloatTensor(np.array(next_state_batch))
+
+        current_q_values = self.model_net(state_batch).gather(1, action_batch)
+
+        with torch.no_grad():
+            next_q_values = self.target_net(next_state_batch).max(1)[0].unsqueeze(1)
+            target_q_values = reward_batch + self.gamma * next_q_values
+
+        loss = nn.MSELoss()(current_q_values, target_q_values)
+
+        self.optimizer.zero_grad()
+        loss.backward()
+        self.optimizer.step()
+
+        self.train_step += 1
+        if self.train_step % self.target_update_frequency == 0:
+            self.target_net.load_state_dict(self.model_net.state_dict())
+
+        if self.epsilon > self.epsilon_min:
+            self.epsilon *= self.epsilon_decay
+
+    def save(self, filepath):
+        torch.save(self.model_net.state_dict(), filepath)
+
+    def load(self, filepath):
+        self.model_net.load_state_dict(torch.load(filepath))
+        self.target_net.load_state_dict(self.model_net.state_dict())
+
+# =============================
+# Compatible Agent for train.py
+# =============================
+class Agent(DQNAgent):
+    def __init__(self):
+        dummy_env = DeliveryEnvironment(enable_gui=False)
+        state_size = dummy_env.get_state_size()
+        action_size = dummy_env.get_action_size()
+        super().__init__(state_size, action_size)
+
+    def take_action(self, observation):
+        return self.select_action(observation)
+
+    def observe_transition(self, state, action, reward, next_state, done):
+        # Enhanced validation check
+        valid = all([
+            state is not None,
+            next_state is not None,
+            isinstance(state, np.ndarray),
+            isinstance(next_state, np.ndarray),
+            not np.any(np.isnan(state)),
+            not np.any(np.isnan(next_state)),
+            state.size > 0,
+            next_state.size > 0
+        ])
+
+        if valid:
+            self.remember(state, action, reward, next_state)
+            self.train()
+        else:
+            print("WARNING: Invalid transition skipped")
+
+        # if done:
+        #     self.reset_episode_state()
+
+    # def reset_episode_state(self):
+    #     self.memory.buffer = [(None, None, None, None)] * self.memory.size
+    #     self.memory.index = 0
+    #     self.memory.currentSize = 0
+    #     print("INFO: ReplayBuffer cleared on episode reset.")

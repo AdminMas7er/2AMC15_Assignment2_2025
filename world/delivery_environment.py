@@ -98,17 +98,16 @@ class DeliveryEnvironment:
         dx = linear_vel * math.cos(self.agent_angle)
         dy = linear_vel * math.sin(self.agent_angle)
         new_pos = self.agent_pos + np.array([dx, dy])
-        
-        # Collision detection
+
         reward = -0.01  # Time penalty
 
-        # Penalize backward movement (action 2)
-        if action == 2:
-            reward -= 0.1  # discourage moving backward
-
-        # Penalize pure rotations (actions 3 and 4)
-        if action in [3, 4]:
-            reward -= 0.05  # discourage endless turning
+        # # Penalize backward movement (action 2)
+        # if action == 2:
+        #     reward -= 0.1  # discourage moving backward
+        #
+        # # Penalize pure rotations (actions 3 and 4)
+        # if action in [3, 4]:
+        #     reward -= 0.05  # discourage endless turning
 
         # Proceed if valid move:
         if self._is_valid_position(new_pos):
