@@ -120,9 +120,6 @@ class DQNAgent:
         self.model_net.load_state_dict(torch.load(filepath))
         self.target_net.load_state_dict(self.model_net.state_dict())
 
-# =============================
-# Compatible Agent for train.py
-# =============================
 class Agent(DQNAgent):
     def __init__(self):
         dummy_env = DeliveryEnvironment(enable_gui=False)
