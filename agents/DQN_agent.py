@@ -6,6 +6,7 @@ from collections import deque
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from replaybuffer import ReplayBuffer
 
 class DQN(nn.Module): #nn.Module is like a base class/template for neural networks
     def __init__(self, input_dim, output_dim):
