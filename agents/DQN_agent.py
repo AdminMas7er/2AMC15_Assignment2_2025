@@ -39,7 +39,7 @@ class DQNAgent:
         self.learning_rate = 0.001
 
         #Initialize Q-networks
-        # self.input_dim =
+        self.input_dim = 3 + 2 + 1  # sensor distances (3), agent_pos (2), agent_angle (1)
         self.output_dim = len(self.actions) #the amount of possible actions using the set discretization action bins
         self.model_net = DQN(self.input_dim, self.output_dim)
         self.target_net = DQN(self.input_dim, self.output_dim) #This helps DQN for stability
@@ -58,7 +58,8 @@ class DQNAgent:
         ])
         return torch.tensor(vec, dtype=torch.float32).unsqueeze(0)
 
-    def take_action(self, observation):
+    def select_action(self, observation):
+    """Function to choose an action using the epsilon-greedy policy"""
         if np.random.rand() < self.epsilon: #Exploration
             return random.choice(self.actions)
         else: #Exploitation
