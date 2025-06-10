@@ -10,8 +10,8 @@ class ReplayBuffer:
         self.currentSize = 0
         self.minimal_experience = minimal_experience if minimal_experience < size else size
 
-    def store(self, state, action, reward, next_state):
-        self.buffer[self.index] = (state, action, reward, next_state)
+    def store(self, state, action, reward, next_state, done):
+        self.buffer[self.index] = (state, action, reward, next_state, done)
         self.index = (self.index + 1) % self.size
         self.currentSize += 1
 

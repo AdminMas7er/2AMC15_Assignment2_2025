@@ -3,6 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.distributions import Categorical
+import torch.optim as optim
 from replaybuffer import ReplayBuffer
 import numpy as np
 from agents import BaseAgent
@@ -90,7 +91,13 @@ class SACAgent(BaseAgent):
         # Initialy sync the target networks with the main networks
         self.Q1_target.load_state_dict(self.Q1.state_dict())
         self.Q2_target.load_state_dict(self.Q2.state_dict())
-        pass
+
+        # Adam Optimizers as used in https://arxiv.org/pdf/1910.07207
+        self.q1_optimizer = optim.Adam(self.q1.parameters(), lr=learning_rate)
+        self.q2_optimizer = optim.Adam(self.q2.parameters(), lr=learning_rate)
+        self.policy_optimizer = optim.Adam(self.policy.parameters(), lr=learning_rate)
+        self.alpha_optimizer = optim.Adam([self.log_alpha], lr=learning_rate)
+        
 
 
     def take_action(self, state):
@@ -102,8 +109,86 @@ class SACAgent(BaseAgent):
         action = distribution.sample()  # Sample an action from the distribution
         
         return action.item() # Convert Tensor to Python int 
-    def update():
-        pass
+    
+    def update(self, sampled_batch):
+        """Update the agent's networks based on a sampled batch from the replay buffer."""
+
+        # Unpack the sampled batch
+        states, actions, rewards, next_states, dones = sampled_batch
+
+        # And convert them to PyTorch tensors
+        states = torch.FloatTensor(states).to(self.device)
+        actions = torch.LongTensor(actions).unsqueeze(1).to(self.device)
+        rewards = torch.FloatTensor(rewards).unsqueeze(1).to(self.device)
+        next_states = torch.FloatTensor(next_states).to(self.device)
+        dones = torch.FloatTensor(dones).unsqueeze(1).to(self.device)
+
+        # ==Eq 4 from https://arxiv.org/pdf/1910.07207==
+        # Update Qnetwork
+        # Compute the target Q-values using the target networks
+        with torch.no_grad():
+            next_probabilities, next_log_probabilities = self.policy(next_states) # pi(a' | s')
+            Q1_target_values = self.Q1_target(next_states) # Q_1'(s',.)
+            Q2_target_values = self.Q2_target(next_states)  # Q_2'(s',.)
+            min_Q_target = torch.min(Q1_target_values, Q2_target_values)  # Take the minimum of the two target Q-values ( min_i Q_i')
+
+            # V(s') = sum_a pi(a|s') [ Q'(s',a) – α log pi(a|s') ]
+            next_v = (next_probabilities * (min_Q_target - self.alpha * next_log_probabilities)).sum(dim=1, keepdim=True)
+            Q_target = rewards + self.gamma * (1 - dones) * next_v  # Compute the target Q-values (y)
+
+        current_Q1_values = self.Q1(states).gather(1, actions)  # Q_1(s,a)
+        current_Q2_values = self.Q2(states).gather(1, actions)
+
+        Q1_loss = F.mse_loss(current_Q1_values, Q_target)  # Compute the loss for Q_1
+        Q2_loss = F.mse_loss(current_Q2_values, Q_target) # Compute the loss for Q_2
+
+        # Update the Q-networks
+        self.q1_optimizer.zero_grad()
+        Q1_loss.backward()
+        self.q1_optimizer.step()
+
+        self.q2_optimizer.zero_grad()
+        Q2_loss.backward()
+        self.q2_optimizer.step()
+         
+         # ==Eq 12 from https://arxiv.org/pdf/1910.07207==
+        # Update the Policy network
+        probabilities, log_probabilities = self.policy(states)
+        Q1_values = self.Q1(states)
+        Q2_values = self.Q2(states)
+
+        min_Q_values = torch.min(Q1_values, Q2_values)  # Take the minimum of the two Q-values
+        policy_loss = (probabilities * (self.alpha * log_probabilities - min_Q_values)).sum(dim=1, keepdim=True).mean()
+        self.policy_optimizer.zero_grad()
+        policy_loss.backward()
+        self.policy_optimizer.step()
+
+        # Eq 11 from https://arxiv.org/pdf/1910.07207
+        # Update the temperature parameter (alpha)
+
+        # TO BE EXPLAINED
+        with torch.no_grad():
+            entropy = - (probabilities * log_probabilities).sum(dim=1)
+        alpha_loss = (self.log_alpha* (entropy - self.target_entropy).detach()).mean()
+
+        self.alpha_optimizer.zero_grad()
+        alpha_loss.backward()
+        self.alpha_optimizer.step()
+
+        # Update the target networks using soft update
+        for parameters, target_parameters in zip(self.Q1.parameters(), self.Q1_target.parameters()):
+            target_parameters.data.copy_(self.tau * parameters.data + (1 - self.tau) * target_parameters.data)
+        for parameters, target_parameters in zip(self.Q2.parameters(), self.Q2_target.parameters()):
+            target_parameters.data.copy_(self.tau * parameters.data + (1 - self.tau) * target_parameters.data)
+
+        return {
+            "q1_loss": Q1_loss.item(),
+            "q2_loss": Q2_loss.item(),
+            "policy_loss": policy_loss.item(),
+            "alpha_loss": alpha_loss.item(),
+            "alpha_value": self.alpha.item(),
+        }
+
 
 
 
