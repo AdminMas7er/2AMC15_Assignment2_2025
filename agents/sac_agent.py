@@ -2,6 +2,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.distributions import Categorical
 from replaybuffer import ReplayBuffer
 import numpy as np
 from agents import BaseAgent
@@ -16,7 +17,7 @@ class QNetwork(nn.Module):
     
     
     """
-    def __init__(self, input_dimension, output_dimension, hidden_dimension=256):
+    def __init__(self, input_dimension: int, output_dimension: int, hidden_dimension: int = 256):
         super(QNetwork, self).__init__()
         self.fc1 = nn.Linear(input_dimension, hidden_dimension) # 'Fully-connected layer 1'
         self.fc2 = nn.Linear(hidden_dimension, hidden_dimension) # 'Fully-connected layer 2'
@@ -27,6 +28,8 @@ class QNetwork(nn.Module):
         x = F.relu(self.fc2(x))
         q = self.fc3(x) # The raw numerial output of layer 3 equals estimation of the q-values for all actions
 
+        return q
+    
 class PolicyNetwork(nn.Module):
     """
     The actor
@@ -45,9 +48,11 @@ class PolicyNetwork(nn.Module):
         logits = self.fc3(x) # The raw output of layer 3 equals the logits for the actions, that we still need to transform into probabilities
         probabilities = F.softmax(logits, dim=-1) # Softmax to turn the logits into actual probabilities for each action
         log_probabilities = F.log_softmax(logits, dim=-1) # Log probabilities for the actions, needed for the loss function
+                                                        # Axis =-1 because actions are the last dimension 
+
         return probabilities, log_probabilities
     
-    
+
 class SACAgent(BaseAgent):
     def __init__(
             self,
@@ -64,18 +69,39 @@ class SACAgent(BaseAgent):
 
     ):
         super(SACAgent, self).__init__()
-        self.state_dimension = state_dimension
+        self.state_dimension = state_dimension # Set dimensions
         self.action_dimension = action_dimension
         self.hidden_dimension = hidden_dimension
-        self.gamma = gamma
-        self.tau = tau
-        self.batch_size = batch_size
-        self.buffer=ReplayBuffer(size=buffer_size, batch_size=batch_size, minimal_experience=10000)
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+        self.gamma = gamma # Set hyperparamters
+        self.tau = tau
+        self.batch_size = batch_size 
+        self.buffer=ReplayBuffer(size=buffer_size, batch_size=batch_size, minimal_experience=10000) # Create replay buffer
+
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu") # Use GPU if available
+
+        # Initialize networks
+        self.Q1 = QNetwork(state_dimension,action_dimension, hidden_dimension).to(self.device) # Critic 1
+        self.Q2 = QNetwork(state_dimension,action_dimension, hidden_dimension).to(self.device) # Critic 2
+        self.Q1_target = QNetwork(state_dimension,action_dimension, hidden_dimension).to(self.device) # Target critic 1
+        self.Q2_target = QNetwork(state_dimension,action_dimension, hidden_dimension).to(self.device) # Target critic 2 
+        self.policy = PolicyNetwork(state_dimension, action_dimension, hidden_dimension).to(self.device) # Actor
+
+        # Initialy sync the target networks with the main networks
+        self.Q1_target.load_state_dict(self.Q1.state_dict())
+        self.Q2_target.load_state_dict(self.Q2.state_dict())
         pass
-    def take_action():
-        pass
+
+
+    def take_action(self, state):
+        """Sample an action from the policy for the current state."""
+        state_tensor = torch.FloatTensor(state).unsqueeze(0).to(self.device)  # Convert state to tensor
+        with torch.no_grad(): # Disabled for efficiency, as we do not need gradients for the action selection
+            probabilities, log_probabilities = self.policy(state_tensor)
+        distribution = Categorical(probabilities)  # Create a categorical distribution from the probabilities
+        action = distribution.sample()  # Sample an action from the distribution
+        
+        return action.item() # Convert Tensor to Python int 
     def update():
         pass
 
