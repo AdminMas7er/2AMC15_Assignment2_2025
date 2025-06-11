@@ -84,120 +84,24 @@ class DeliveryEnvironment:
         return self._get_state()
 
     def step(self, action):
-        """Testing different options here, since DQN is very sensitive to reward function and does not seem to be working great
-        OPTION 1: SIMPLE & DEBUGGING: just minimizing the distance to the target
-        OPTION 2: DEFAULT AS GIJS PROPOSED
-        OPTION 3: DEFAULT AS GIJS PROPOSED, BUT THEN WITH PENALTY FOR ENDLESLY TURNING OR GOING BACKWARDS
-        *****ONLY USE ONE OF THEM AT THE TIME TO TRY******
-        So far number 1 actually seems to work best.. """
-
-        #****OPTION 1: SIMPLE & DEBUGGING:****
-        #************************************************************************************************
+        """Execute action"""
         if self.done:
             return self._get_state(), 0, True, {}
-
+        
+        # Execute action
         linear_vel, angular_vel = self.actions[action]
-
+        
+        # Update agent state
         self.agent_angle += angular_vel
         self.agent_angle = self.agent_angle % (2 * np.pi)
-
+        
         dx = linear_vel * math.cos(self.agent_angle)
         dy = linear_vel * math.sin(self.agent_angle)
         new_pos = self.agent_pos + np.array([dx, dy])
+        info = {}
 
-        reward = 0.0
+        reward = -0.01  # Time penalty
 
-        if not self._is_valid_position(new_pos):
-            reward = -10  # collision penalty
-        else:
-            self.agent_pos = new_pos
-
-            target_pos = self.tables[self.target_table_idx]
-            distance_to_target = np.linalg.norm(self.agent_pos - target_pos)
-
-            reward = -distance_to_target  # Negative distance → closer = better
-
-            if distance_to_target < self.table_radius + self.agent_radius + 0.1:
-                reward += 100
-                self.done = True
-                print(f"INFO: Target table reached at step {self.step_count}!")
-
-
-        self.step_count += 1
-        if self.step_count >= self.max_steps:
-            self.done = True
-            reward -= 20
-
-        state = self._get_state()
-
-        if self.enable_gui:
-            self._render()
-
-        #****OPTION 2: DEFAULT AS GIJS PROPOSED ****
-       # *************************************************************************************************
-       #  if self.done:
-       #      return self._get_state(), 0, True, {}
-       #
-       #  # Execute action
-       #  linear_vel, angular_vel = self.actions[action]
-       #
-       #  # Update agent state
-       #  self.agent_angle += angular_vel
-       #  self.agent_angle = self.agent_angle % (2 * np.pi)
-       #
-       #  dx = linear_vel * math.cos(self.agent_angle)
-       #  dy = linear_vel * math.sin(self.agent_angle)
-       #  new_pos = self.agent_pos + np.array([dx, dy])
-       #
-       #  reward = -0.01  # Time penalty
-       #
-       #  # Proceed if valid move:
-       #  if self._is_valid_position(new_pos):
-       #      self.agent_pos = new_pos
-       #
-       #      # Check if target reached
-       #      target_pos = self.tables[self.target_table_idx]
-       #      distance_to_target = np.linalg.norm(self.agent_pos - target_pos)
-       #
-       #      if distance_to_target < self.table_radius + self.agent_radius + 0.1:
-       #          reward += 100  # Target reached reward
-       #          self.done = True
-       #          print("INFO: Target table reached!")
-       #      else:
-       #          # Distance reward (encourage approaching target)
-       #          reward += max(0, 5.0 - distance_to_target) * 0.1
-       #  else:
-       #      # Collision penalty
-       #      reward -= 10
-       #
-       #  self.step_count += 1
-       #  if self.step_count >= self.max_steps:
-       #      self.done = True
-       #      reward -= 20  # Timeout penalty
-       #
-       #  state = self._get_state()
-       #
-       #  if self.enable_gui:
-       #      self._render()
-
-        #****OPTION 3 ****
-        #***************************************************************************************************
-        # if self.done:
-        #     return self._get_state(), 0, True, {}
-        #
-        # # Execute action
-        # linear_vel, angular_vel = self.actions[action]
-        #
-        # # Update agent state
-        # self.agent_angle += angular_vel
-        # self.agent_angle = self.agent_angle % (2 * np.pi)
-        #
-        # dx = linear_vel * math.cos(self.agent_angle)
-        # dy = linear_vel * math.sin(self.agent_angle)
-        # new_pos = self.agent_pos + np.array([dx, dy])
-        #
-        # reward = -0.01  # Time penalty
-        #
         # # Penalize backward movement (action 2)
         # if action == 2:
         #     reward -= 0.1  # discourage moving backward
@@ -205,63 +109,67 @@ class DeliveryEnvironment:
         # # Penalize pure rotations (actions 3 and 4)
         # if action in [3, 4]:
         #     reward -= 0.05  # discourage endless turning
-        #
-        # # Proceed if valid move:
-        # if self._is_valid_position(new_pos):
-        #     self.agent_pos = new_pos
-        #
-        #     # Check if target reached
-        #     target_pos = self.tables[self.target_table_idx]
-        #     distance_to_target = np.linalg.norm(self.agent_pos - target_pos)
-        #
-        #     if distance_to_target < self.table_radius + self.agent_radius + 0.1:
-        #         reward += 100  # Target reached reward
-        #         self.done = True
-        #         print("INFO: Target table reached!")
-        #     else:
-        #         # Distance reward (encourage approaching target)
-        #         reward += max(0, 5.0 - distance_to_target) * 0.1
-        # else:
-        #     # Collision penalty
-        #     reward -= 10
-        #
-        # self.step_count += 1
-        # if self.step_count >= self.max_steps:
-        #     self.done = True
-        #     reward -= 20  # Timeout penalty
-        #
-        # state = self._get_state()
-        #
-        # if self.enable_gui:
-        #     self._render()
-        #
-        return state, reward, self.done, {}
+
+        # Proceed if valid move:
+        if self._is_valid_position(new_pos):
+            self.agent_pos = new_pos
+            
+            # Check if target reached
+            target_pos = self.tables[self.target_table_idx]
+            distance_to_target = np.linalg.norm(self.agent_pos - target_pos)
+            
+            if distance_to_target < self.table_radius + self.agent_radius + 0.1:
+                reward += 100  # Target reached reward
+                self.done = True
+                #print("reached")
+                info = {"success": True}
+            else:
+                # Distance reward (encourage approaching target)
+                reward += max(0, 5.0 - distance_to_target) * 0.1
+        else:
+            # Collision penalty
+            reward -= 10
+        
+        self.step_count += 1
+        if self.step_count >= self.max_steps:
+            self.done = True
+            reward -= 20  # Timeout penalty
+        
+        state = self._get_state()
+        
+        if self.enable_gui:
+            self._render()
+        
+        return state, reward, self.done, info
 
     def _get_state(self):
         """Get current state"""
-        # Sensor readings
-        sensor_distances = [self._get_sensor_distance(angle) 
-                           for angle in self.sensor_angles]
         
-        # Target relative position and angle
-        target_pos = self.tables[self.target_table_idx]
-        relative_pos = target_pos - self.agent_pos
-        distance_to_target = np.linalg.norm(relative_pos)
-        angle_to_target = math.atan2(relative_pos[1], relative_pos[0]) - self.agent_angle
-        angle_to_target = math.atan2(math.sin(angle_to_target), math.cos(angle_to_target))
+        # agent's own normalized pose
+        x_norm = self.agent_pos[0] / self.width
+        y_norm = self.agent_pos[1] / self.height
+        cos_ang = math.cos(self.agent_angle)
+        sin_ang = math.sin(self.agent_angle)
+        self_state = [x_norm, y_norm, cos_ang, sin_ang]
         
-        state = np.array([
-            self.agent_pos[0] / self.width,      # Normalized position
-            self.agent_pos[1] / self.height,
-            math.cos(self.agent_angle),          # Orientation
-            math.sin(self.agent_angle),
-            distance_to_target / (self.width + self.height),  # Normalized distance
-            math.cos(angle_to_target),           # Target angle
-            math.sin(angle_to_target),
-            *[d / self.max_sensor_range for d in sensor_distances]  # Normalized sensor readings
+        # sensor readings
+        # sensor readings
+        sensors = [self._get_sensor_distance(a) / self.max_sensor_range
+                   for a in self.sensor_angles]
+
+        # one-hot target table index
+        T = len(self.tables)
+        one_hot = np.zeros(T, dtype=np.float32)
+        one_hot[self.target_table_idx] = 1.0
+
+        # concatenate
+        state = np.concatenate([
+            np.array(self_state, dtype=np.float32),
+            np.array(sensors, dtype=np.float32),
+            one_hot
         ])
         
-        return state.astype(np.float32)
+        return state
 
     def _is_valid_position(self, pos):
         """Check if position is valid"""
@@ -342,7 +250,7 @@ class DeliveryEnvironment:
 
     def get_state_size(self):
         """Get state space size"""
-        return len(self._get_state())
+        return 4 + len(self.sensor_angles) + len(self.tables)
 
     def get_action_size(self):
         """Get action space size"""
