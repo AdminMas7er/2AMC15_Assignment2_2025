@@ -14,7 +14,7 @@ BACKGROUND_COLOR = (255, 255, 255)
 SENSOR_COLOR = (150, 150, 150)
 
 # Pre-defined step size and rotation
-STEP_LENGTH = 0.1
+STEP_LENGTH = 1
 STEP_ROTATION = np.radians(30)
 
 class ContinuousEnvironment:
