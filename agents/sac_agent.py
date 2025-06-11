@@ -4,9 +4,32 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.distributions import Categorical
 import torch.optim as optim
-from replaybuffer import ReplayBuffer
+import agents.replaybuffer as replaybuffer
 import numpy as np
-from agents import BaseAgent
+
+def preprocess_observation(observation):
+    """
+    Converts environment observation dict into a flat vector.
+    Expected keys:
+      - agent_pos: array[2]
+      - agent_angle: float
+      - sensor_distances: list[3]
+      - pickup_point: array[2]
+      - has_order: bool
+      - current_target_table: array[2] or None
+    Returns:
+      state vector: [agent_pos(2), agent_angle(1), sensors(3), pickup_point(2), has_order(1), target_table(2)]
+    """
+    agent_pos = np.array(observation['agent_pos'], dtype=np.float32)
+    agent_angle = np.array([observation['agent_angle']], dtype=np.float32)
+    sensors = np.array(observation['sensor_distances'], dtype=np.float32)
+    pickup = np.array(observation['pickup_point'], dtype=np.float32)
+    has_order = np.array([1.0 if observation['has_order'] else 0.0], dtype=np.float32)
+    if observation['current_target_table'] is not None:
+        target = np.array(observation['current_target_table'], dtype=np.float32)
+    else:
+        target = np.zeros(2, dtype=np.float32)
+    return np.concatenate([agent_pos, agent_angle, sensors, pickup, has_order, target])
 
 class QNetwork(nn.Module):
     """
@@ -54,7 +77,7 @@ class PolicyNetwork(nn.Module):
         return probabilities, log_probabilities
     
 
-class SACAgent(BaseAgent):
+class SACAgent():
     def __init__(
             self,
             state_dimension,
@@ -70,6 +93,8 @@ class SACAgent(BaseAgent):
 
     ):
         super(SACAgent, self).__init__()
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu") # Use GPU if available
+
         self.state_dimension = state_dimension # Set dimensions
         self.action_dimension = action_dimension
         self.hidden_dimension = hidden_dimension
@@ -77,9 +102,15 @@ class SACAgent(BaseAgent):
         self.gamma = gamma # Set hyperparamters
         self.tau = tau
         self.batch_size = batch_size 
-        self.buffer=ReplayBuffer(size=buffer_size, batch_size=batch_size, minimal_experience=10000) # Create replay buffer
+        self.buffer=replaybuffer.ReplayBuffer(size=buffer_size, batch_size=batch_size, minimal_experience=10000) # Create replay buffer
 
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu") # Use GPU if available
+        # Temperature
+        if target_entropy is None:
+            self.target_entropy = -np.log(1.0 / action_dimension) * 0.98
+        else:
+            self.target_entropy = target_entropy
+
+        self.log_alpha = torch.tensor(np.log(alpha), requires_grad=True, device=self.device)
 
         # Initialize networks
         self.Q1 = QNetwork(state_dimension,action_dimension, hidden_dimension).to(self.device) # Critic 1
@@ -93,15 +124,18 @@ class SACAgent(BaseAgent):
         self.Q2_target.load_state_dict(self.Q2.state_dict())
 
         # Adam Optimizers as used in https://arxiv.org/pdf/1910.07207
-        self.q1_optimizer = optim.Adam(self.q1.parameters(), lr=learning_rate)
-        self.q2_optimizer = optim.Adam(self.q2.parameters(), lr=learning_rate)
+        self.Q1_optimizer = optim.Adam(self.Q1.parameters(), lr=learning_rate)
+        self.Q2_optimizer = optim.Adam(self.Q2.parameters(), lr=learning_rate)
         self.policy_optimizer = optim.Adam(self.policy.parameters(), lr=learning_rate)
         self.alpha_optimizer = optim.Adam([self.log_alpha], lr=learning_rate)
         
+    @property
+    def alpha(self):
+        return self.log_alpha.exp()
 
-
-    def take_action(self, state):
+    def take_action(self, observation):
         """Sample an action from the policy for the current state."""
+        state = preprocess_observation(observation)
         state_tensor = torch.FloatTensor(state).unsqueeze(0).to(self.device)  # Convert state to tensor
         with torch.no_grad(): # Disabled for efficiency, as we do not need gradients for the action selection
             probabilities, log_probabilities = self.policy(state_tensor)
@@ -109,6 +143,16 @@ class SACAgent(BaseAgent):
         action = distribution.sample()  # Sample an action from the distribution
         
         return action.item() # Convert Tensor to Python int 
+    
+    def append_transition(self, observation, action, reward, next_observation, done):
+        """Preprocess observation and store in buffer.
+
+        (Observation is used here as the description for what the environment returns regarding sensor data, 
+        this needs to be parsed into a 'state')"""
+
+        state = preprocess_observation(observation)
+        next_state = preprocess_observation(next_observation)
+        self.buffer.store(state, action, reward, next_state, done)
     
     def update(self, sampled_batch):
         """Update the agent's networks based on a sampled batch from the replay buffer."""
@@ -143,13 +187,13 @@ class SACAgent(BaseAgent):
         Q2_loss = F.mse_loss(current_Q2_values, Q_target) # Compute the loss for Q_2
 
         # Update the Q-networks
-        self.q1_optimizer.zero_grad()
+        self.Q1_optimizer.zero_grad()
         Q1_loss.backward()
-        self.q1_optimizer.step()
+        self.Q1_optimizer.step()
 
-        self.q2_optimizer.zero_grad()
+        self.Q2_optimizer.zero_grad()
         Q2_loss.backward()
-        self.q2_optimizer.step()
+        self.Q2_optimizer.step()
          
          # ==Eq 12 from https://arxiv.org/pdf/1910.07207==
         # Update the Policy network
