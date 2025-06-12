@@ -121,17 +121,13 @@ class DQNAgent:
         self.target_net.load_state_dict(self.model_net.state_dict())
 
 class Agent(DQNAgent):
-    def __init__(self):
-        dummy_env = DeliveryEnvironment(enable_gui=False)
-        state_size = dummy_env.get_state_size()
-        action_size = dummy_env.get_action_size()
+    def __init__(self, state_size, action_size):
         super().__init__(state_size, action_size)
 
     def take_action(self, observation):
         return self.select_action(observation)
 
     def observe_transition(self, state, action, reward, next_state, done):
-        # Enhanced validation check
         valid = all([
             state is not None,
             next_state is not None,
@@ -148,6 +144,7 @@ class Agent(DQNAgent):
             self.train()
         else:
             print("WARNING: Invalid transition skipped")
+
 
         # if done:
         #     self.reset_episode_state()

@@ -8,7 +8,7 @@ import numpy as np
 import importlib
 
 try:
-    from world.delivery_environment import DeliveryEnvironment as ContinuousEnvironment
+    from world.environment import ContinuousEnvironment
     from world.continuous_space import ContinuousSpace
 except ModuleNotFoundError:
     import sys
@@ -40,7 +40,7 @@ def main():
 
     # Load environment
     env = ContinuousEnvironment(space_file=args.restaurant, enable_gui=not args.no_gui)
-    agent = AgentClass()
+    agent = AgentClass(state_size=env.get_state_size(), action_size=env.get_action_size())
 
     observation = env.reset()
 
