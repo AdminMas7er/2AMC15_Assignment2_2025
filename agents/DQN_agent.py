@@ -21,7 +21,7 @@ class DQNAgent:
     def __init__(self, state_size, action_size):
         self.gamma = 0.99
         self.epsilon = 1.0
-        self.epsilon_decay = 0.995
+        self.epsilon_decay = 0.9
         self.epsilon_min = 0.01
         self.batch_size = 64
         self.memory_size = 10000
@@ -42,6 +42,7 @@ class DQNAgent:
         return torch.tensor(state, dtype=torch.float32).unsqueeze(0)
 
     def select_action(self, state):
+        """Select an action by epsilon greedy policy"""
         if np.random.rand() < self.epsilon:
             return random.randint(0, self.action_size - 1)
         else:
@@ -54,7 +55,7 @@ class DQNAgent:
         self.memory.store(state, action, reward, next_state)
 
     def train(self):
-        if self.memory.currentSize < self.batch_size:
+        if len(self.memory.buffer) < self.batch_size:
             return
 
         batch = self.memory.sample()

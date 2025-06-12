@@ -1,21 +1,18 @@
-from random import sample
+import random
+from collections import deque
 
 class ReplayBuffer:
-
-    def __init__(self, size: int, batch_size :int):
-        self.size = size
+    def __init__(self, maxlen: int, batch_size: int):
         self.batch_size = batch_size
-        self.index = 0
-        self.buffer = [(None, None, None, None)]*size
-        self.currentSize = 0
+        self.samples = 0
+        self.buffer = deque([], maxlen=maxlen)
 
     def store(self, state, action, reward, next_state):
-        self.buffer[self.index] = (state, action, reward, next_state)
-        self.index = (self.index + 1) % self.size
-        self.currentSize += 1
+        self.buffer.append((state, action, reward, next_state))
+        self.samples += 1
 
     def sample(self):
-        if self.currentSize < self.batch_size:
-            raise ValueError("Buffer does not contain enough elements yet")
-        return sample(self.buffer, self.batch_size)
+        if len(self.buffer) < self.batch_size:
+            return None
+        return random.sample(self.buffer, self.batch_size)
     
