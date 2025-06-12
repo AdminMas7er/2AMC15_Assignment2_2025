@@ -251,6 +251,19 @@ class ContinuousEnvironment:
         draw_text(f"Steps: {self.steps_taken}", WINDOW_SIZE[0] - panel_width + 10, 30)
         draw_text(f"Reward: {self.cumulative_reward:.2f}", WINDOW_SIZE[0] - panel_width + 10, 50)
 
+        #Add the target table in the legend
+        if obs["current_target_table"] is None:
+            target_table_text = "Target table = None"
+        else:
+            target_idx = None
+            for idx, table in enumerate(obs["target_tables"]):
+                if np.allclose(table, obs["current_target_table"], atol=1e-2):
+                    target_idx = idx + 1  # 1-based index
+                    break
+            target_table_text = f"Target table = {target_idx}"
+
+        # Draw it below reward
+        draw_text(target_table_text, WINDOW_SIZE[0] - panel_width + 10, 70)
 
         pygame.display.flip()
         pygame.time.delay(50)
