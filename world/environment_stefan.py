@@ -13,6 +13,10 @@ AGENT_COLOR = (0, 102, 204)
 BACKGROUND_COLOR = (255, 255, 255)
 SENSOR_COLOR = (150, 150, 150)
 
+# Pre-defined step size and rotation
+STEP_LENGTH = 0.1
+STEP_ROTATION = np.radians(30)
+
 class ContinuousEnvironment:
     def __init__(self, width=10.0, height=10.0, table_radius=0.5, n_tables=3, seed=42, enable_gui=True, space_file: Path = None):
         if space_file is not None:
@@ -40,6 +44,14 @@ class ContinuousEnvironment:
         self.enable_gui = enable_gui
         self.window = None
         self.screen_scale = 50
+
+        self.actions = {
+            0: (0.0, 0.0), # Do nothing
+            1: (0.0, STEP_ROTATION), # Rotate right
+            2: (0.0, -STEP_ROTATION), # Rotate left
+            3: (STEP_LENGTH, 0.0), # Step forward
+            4: (-STEP_LENGTH, 0.0) # Step backward
+        }
 
         self.episode_start_time = time.time()
         self.steps_taken = 0
@@ -73,7 +85,7 @@ class ContinuousEnvironment:
         return self._get_observation()
 
     def step(self, action):
-        velocity, rotation = action
+        velocity, rotation = self.actions.get(action) # Get the action from the key
         self.agent_angle += rotation
         dx = velocity * math.cos(self.agent_angle)
         dy = velocity * math.sin(self.agent_angle)
@@ -82,6 +94,9 @@ class ContinuousEnvironment:
         # Make the move if the position is not in a table and inside the map
         if self._is_valid_position(new_pos):
             self.agent_pos = new_pos
+        else:
+            # Negative reward for trying to walk out of bounds
+            reward = -5
 
         obs = self._get_observation()
         if self.enable_gui:
@@ -110,7 +125,7 @@ class ContinuousEnvironment:
         if self.enable_gui:
             self._render(obs)
 
-        return obs, reward, done
+        return obs, reward, done, {}
 
 
     def _is_valid_position(self, pos):
@@ -148,6 +163,11 @@ class ContinuousEnvironment:
         font = pygame.font.SysFont("Arial", 16)
 
         self.window.fill(BACKGROUND_COLOR)
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                exit()
 
         def to_px(pos):
             return int(pos[0] * self.screen_scale), int(self.height * self.screen_scale - pos[1] * self.screen_scale)
@@ -211,3 +231,11 @@ class ContinuousEnvironment:
     def close(self):
         if self.enable_gui:
             pygame.quit()
+
+    #ADDED THIS 12/06
+    def get_state_size(self):
+        # agent_pos (2), agent_angle (1), sensor_distances (3), pickup_point (2), has_order (1), current_target_table (2)
+        return 11
+
+    def get_action_size(self):
+        return len(self.actions)
