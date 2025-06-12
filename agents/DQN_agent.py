@@ -4,7 +4,6 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from .replaybuffer import ReplayBuffer  # relative import
-from world.delivery_environment import DeliveryEnvironment
 
 class DQN(nn.Module):
     def __init__(self, input_dim, output_dim):
@@ -60,19 +59,18 @@ class DQNAgent:
 
         batch = self.memory.sample()
 
-        # Filter out any remaining invalid transitions
         valid_batch = []
         for trans in batch:
             s, a, r, ns = trans
             if (
-                    s is not None and
-                    ns is not None and
-                    isinstance(s, np.ndarray) and
-                    isinstance(ns, np.ndarray) and
-                    s.size > 0 and
-                    ns.size > 0 and
-                    not np.any(np.isnan(s)) and
-                    not np.any(np.isnan(ns))
+                s is not None and
+                ns is not None and
+                isinstance(s, np.ndarray) and
+                isinstance(ns, np.ndarray) and
+                s.size > 0 and
+                ns.size > 0 and
+                not np.any(np.isnan(s)) and
+                not np.any(np.isnan(ns))
             ):
                 valid_batch.append(trans)
 
@@ -80,14 +78,6 @@ class DQNAgent:
             return
 
         state_batch, action_batch, reward_batch, next_state_batch = zip(*valid_batch)
-
-        # Debug check — show bad states
-        for i, s in enumerate(state_batch):
-            if s is None or np.any(np.isnan(s)):
-                print(f"WARNING: Bad state at index {i}: {s}")
-        for i, s in enumerate(next_state_batch):
-            if s is None or np.any(np.isnan(s)):
-                print(f"WARNING: Bad next_state at index {i}: {s}")
 
         state_batch = torch.FloatTensor(np.array(state_batch))
         action_batch = torch.LongTensor(action_batch).unsqueeze(1)
@@ -124,33 +114,46 @@ class Agent(DQNAgent):
     def __init__(self, state_size, action_size):
         super().__init__(state_size, action_size)
 
+    def state_to_vector(self, obs):
+        agent_pos = obs["agent_pos"]  # (2,)
+        agent_angle = np.array([obs["agent_angle"]])  # (1,)
+        sensor_distances = np.array(obs["sensor_distances"])  # (3,)
+        pickup_point = obs["pickup_point"]  # (2,)
+        has_order = np.array([float(obs["has_order"])])  # (1,)
+
+        if obs["current_target_table"] is None:
+            current_target_table = np.array([0.0, 0.0])
+        else:
+            current_target_table = obs["current_target_table"]  # (2,)
+
+        return np.concatenate([
+            agent_pos,
+            agent_angle,
+            sensor_distances,
+            pickup_point,
+            has_order,
+            current_target_table
+        ])
+
     def take_action(self, observation):
-        return self.select_action(observation)
+        state_vector = self.state_to_vector(observation)
+        return self.select_action(state_vector)
 
     def observe_transition(self, state, action, reward, next_state, done):
+        state_vector = self.state_to_vector(state)
+        next_state_vector = self.state_to_vector(next_state)
+
         valid = all([
-            state is not None,
-            next_state is not None,
-            isinstance(state, np.ndarray),
-            isinstance(next_state, np.ndarray),
-            not np.any(np.isnan(state)),
-            not np.any(np.isnan(next_state)),
-            state.size > 0,
-            next_state.size > 0
+            state_vector is not None,
+            next_state_vector is not None,
+            not np.any(np.isnan(state_vector)),
+            not np.any(np.isnan(next_state_vector)),
+            state_vector.size > 0,
+            next_state_vector.size > 0
         ])
 
         if valid:
-            self.remember(state, action, reward, next_state)
+            self.remember(state_vector, action, reward, next_state_vector)
             self.train()
         else:
             print("WARNING: Invalid transition skipped")
-
-
-        # if done:
-        #     self.reset_episode_state()
-
-    # def reset_episode_state(self):
-    #     self.memory.buffer = [(None, None, None, None)] * self.memory.size
-    #     self.memory.index = 0
-    #     self.memory.currentSize = 0
-    #     print("INFO: ReplayBuffer cleared on episode reset.")

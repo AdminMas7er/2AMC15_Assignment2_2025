@@ -125,7 +125,7 @@ class ContinuousEnvironment:
         if self.enable_gui:
             self._render(obs)
 
-        return obs, reward, done
+        return obs, reward, done, {}
 
 
     def _is_valid_position(self, pos):
@@ -163,6 +163,11 @@ class ContinuousEnvironment:
         font = pygame.font.SysFont("Arial", 16)
 
         self.window.fill(BACKGROUND_COLOR)
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                exit()
 
         def to_px(pos):
             return int(pos[0] * self.screen_scale), int(self.height * self.screen_scale - pos[1] * self.screen_scale)
@@ -226,3 +231,11 @@ class ContinuousEnvironment:
     def close(self):
         if self.enable_gui:
             pygame.quit()
+
+    #ADDED THIS 12/06
+    def get_state_size(self):
+        # agent_pos (2), agent_angle (1), sensor_distances (3), pickup_point (2), has_order (1), current_target_table (2)
+        return 11
+
+    def get_action_size(self):
+        return len(self.actions)
