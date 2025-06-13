@@ -80,8 +80,11 @@ class ContinuousEnvironment:
             pos = self.pickup_point.copy()
         self.agent_pos = np.array(pos)
         self.agent_angle = angle
-        self.has_order = False
-        self.current_target_table = None
+
+        #Starting with the order already assigned (skipping pickup phase)
+        self.has_order = True #starts with order
+        self.current_target_table = random.choice(self.tables)
+
         self.episode_start_time = time.time()
         self.steps_taken = 0
         self.cumulative_reward = 0.0
@@ -95,6 +98,9 @@ class ContinuousEnvironment:
         dy = velocity * math.sin(self.agent_angle)
         new_pos = self.agent_pos + np.array([dx, dy])
 
+        reward = -0.01  # Small negative step cost
+        done = False
+
         # Make the move if the position is not in a table and inside the map
         if self._is_valid_position(new_pos):
             self.agent_pos = new_pos
@@ -102,25 +108,24 @@ class ContinuousEnvironment:
             # Negative reward for trying to walk out of bounds
             reward = -5
 
+        #Get observation and render
         obs = self._get_observation()
         if self.enable_gui:
             self._render(obs)
 
-        reward = -0.01  # Small negative step cost
-        done = False
-
-        # If agent reaches the pickup point
-        if not self.has_order and np.linalg.norm(self.agent_pos - self.pickup_point) < 0.3:
-            self.has_order = True
-            self.current_target_table = random.choice(self.tables)
-            reward = 1.0  # Reward for picking up
+        # Commented this out to skip pickup phase
+        # # If agent reaches the pickup point
+        # if not self.has_order and np.linalg.norm(self.agent_pos - self.pickup_point) < 0.3:
+        #     self.has_order = True
+        #     self.current_target_table = random.choice(self.tables)
+        #     reward = 1.0  # Reward for picking up
 
         # If agent reaches the delivery table
-        elif self.has_order and np.linalg.norm(self.agent_pos - self.current_target_table) < self.table_radius * 1.5:
+        if self.has_order and np.linalg.norm(self.agent_pos - self.current_target_table) < self.table_radius * 1.5:
             self.has_order = False
             self.current_target_table = None
             reward = 5.0  # Reward for delivery
-            done = True  # Optional
+            done = True  # Optional, this depends on whether you want it to continue with other tables or do just one table
 
         self.steps_taken += 1
         self.cumulative_reward += reward
