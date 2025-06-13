@@ -129,7 +129,7 @@ class ContinuousEnvironment:
         if self.has_order and np.linalg.norm(self.agent_pos - self.current_target_table) < self.table_radius * 1.5:
             self.has_order = False
             self.current_target_table = None
-            reward = 5.0  # Reward for delivery
+            reward = 20.0  # Reward for delivery
             done = True  # Optional, this depends on whether you want it to continue with other tables or do just one table
             print(f"DELIVERED! Reward: {reward}, Steps taken: {self.steps_taken}")
 

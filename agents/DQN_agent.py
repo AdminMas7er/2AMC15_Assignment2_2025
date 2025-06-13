@@ -104,12 +104,15 @@ class DQNAgent:
         if self.epsilon > self.epsilon_min:
             self.epsilon *= self.epsilon_decay
 
-    def save(self, filepath):
-        torch.save(self.model_net.state_dict(), filepath)
+    def save_model(self, filename):
+        torch.save(self.model_net.state_dict(), filename)
+        print(f"Model saved to {filename}")
 
-    def load(self, filepath):
-        self.model_net.load_state_dict(torch.load(filepath))
+    def load_model(self, filename):
+        self.model_net.load_state_dict(torch.load(filename))
         self.target_net.load_state_dict(self.model_net.state_dict())
+        self.model_net.eval()
+        print(f"Model loaded from {filename}")
 
 class Agent(DQNAgent):
     def __init__(self, state_size, action_size):
@@ -163,14 +166,5 @@ class Agent(DQNAgent):
         else:
             print("WARNING: Invalid transition skipped")
 
-        # Save trained model to disk
-        def save_model(self, filename):
-            torch.save(self.model_net.state_dict(), filename)
-            print(f"Model saved to {filename}")
 
-        # Load trained model from disk
-        def load_model(self, filename):
-            self.model_net.load_state_dict(torch.load(filename))
-            self.model_net.eval()  # Important! Set to evaluation mode
-            print(f"Model loaded from {filename}")
 
