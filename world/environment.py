@@ -90,6 +90,10 @@ class ContinuousEnvironment:
         self.steps_taken = 0
         self.cumulative_reward = 0.0
         print("Resetting agent_pos to pickup_point:", self.agent_pos, "pickup_point:", self.pickup_point)
+
+        # Initialize visit counter
+        self.visit_counter = {}
+
         return self._get_observation()
 
     def step(self, action):
@@ -129,12 +133,15 @@ class ContinuousEnvironment:
             done = True  # Optional, this depends on whether you want it to continue with other tables or do just one table
             print(f"DELIVERED! Reward: {reward}, Steps taken: {self.steps_taken}")
 
+        # Visit penalty
+        cell_size = 0.5
+        cell = tuple((self.agent_pos / cell_size).astype(int))
+        self.visit_counter[cell] = self.visit_counter.get(cell, 0) + 1
+        visit_penalty = -0.01 * (1.05 ** self.visit_counter[cell]) #Penalty for camping in the same spot
+        reward += visit_penalty
+
         self.steps_taken += 1
         self.cumulative_reward += reward
-
-        obs = self._get_observation()
-        if self.enable_gui:
-            self._render(obs)
 
         return obs, reward, done, {}
 

@@ -21,8 +21,8 @@ class DQNAgent:
     def __init__(self, state_size, action_size):
         self.gamma = 0.99
         self.epsilon = 1.0
-        self.epsilon_decay = 0.9
-        self.epsilon_min = 0.01
+        self.epsilon_decay = 0.995
+        self.epsilon_min = 0.05
         self.batch_size = 64
         self.memory_size = 10000
         self.target_update_frequency = 4
@@ -162,3 +162,15 @@ class Agent(DQNAgent):
             self.train()
         else:
             print("WARNING: Invalid transition skipped")
+
+        # Save trained model to disk
+        def save_model(self, filename):
+            torch.save(self.model_net.state_dict(), filename)
+            print(f"Model saved to {filename}")
+
+        # Load trained model from disk
+        def load_model(self, filename):
+            self.model_net.load_state_dict(torch.load(filename))
+            self.model_net.eval()  # Important! Set to evaluation mode
+            print(f"Model loaded from {filename}")
+
