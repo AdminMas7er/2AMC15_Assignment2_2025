@@ -1,34 +1,20 @@
-from random import sample
-import numpy as np
-class ReplayBuffer:
+import random
+from collections import deque
 
-    def __init__(self, size: int, batch_size: int, minimal_experience: int):
-        self.size = size
+class ReplayBuffer:
+    def __init__(self, maxlen: int, batch_size: int):
         self.batch_size = batch_size
-        self.index = 0
-        self.buffer = [(None, None, None, None)]*size
-        self.currentSize = 0
-        self.minimal_experience = minimal_experience if minimal_experience < size else size
+        self.samples = 0
+        self.buffer = deque([], maxlen=maxlen)
 
     def store(self, state, action, reward, next_state, done):
-        self.buffer[self.index] = (state, action, reward, next_state, done)
-        self.index = (self.index + 1) % self.size
-        self.currentSize += 1
+        self.buffer.append((state, action, reward, next_state,done))
+        self.samples += 1
 
-    def sample_batch(self):
-        if self.currentSize < self.minimal_experience:
-            raise ValueError("Buffer does not contain enough elements yet")
-        if self.currentSize < self.size:
-            batch = sample(self.buffer[:self.currentSize], self.batch_size)
-        else:
-            batch = sample(self.buffer[:], self.batch_size)
-        states, actions, rewards, next_states, dones = zip(*batch)
-        
-        return (
-        np.array(states),
-        np.array(actions),
-        np.array(rewards),
-        np.array(next_states),
-        np.array(dones)
-    )
+    def sample(self):
+        if len(self.buffer) < self.batch_size:
+            return None
+        return random.sample(self.buffer, self.batch_size)
+    def __len__(self):
+        return len(self.buffer)
     

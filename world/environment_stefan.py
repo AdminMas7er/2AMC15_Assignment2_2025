@@ -74,7 +74,10 @@ class ContinuousEnvironment:
             tables.append(np.array([x, y]))
         return tables
 
-    def reset(self, pos=(1.0, 1.0), angle=0.0):
+    def reset(self, pos=None, angle=0.0):
+        # Start agent at pickup point from space file
+        if pos is None:
+            pos = self.pickup_point.copy()
         self.agent_pos = np.array(pos)
         self.agent_angle = angle
         self.has_order = False
@@ -82,6 +85,7 @@ class ContinuousEnvironment:
         self.episode_start_time = time.time()
         self.steps_taken = 0
         self.cumulative_reward = 0.0
+        print("Resetting agent_pos to pickup_point:", self.agent_pos, "pickup_point:", self.pickup_point)
         return self._get_observation()
 
     def step(self, action):
@@ -175,8 +179,16 @@ class ContinuousEnvironment:
         # Draw tables
         for idx, table in enumerate(obs["target_tables"]):
             px_pos = to_px(table)
+
+            # Determine color:
+            if obs["current_target_table"] is not None and np.allclose(table, obs["current_target_table"], atol=1e-2):
+                color = (255, 0, 0)  # Red for current target table
+            else:
+                color = TABLE_COLOR  # Normal table color
+
+            # Draw table circle
             pygame.draw.circle(
-                self.window, TABLE_COLOR,
+                self.window, color,
                 px_pos, int(self.table_radius * self.screen_scale)
             )
 
@@ -186,7 +198,27 @@ class ContinuousEnvironment:
             self.window.blit(label, label_rect)
 
         # Draw pickup point
-        pygame.draw.circle(self.window, (0, 255, 0), to_px(self.pickup_point), 8)
+        # Draw pickup point as rectangle with "KITCHEN" label
+        pickup_px = to_px(self.pickup_point)
+        rect_width = 80
+        rect_height = 40
+
+        # Rectangle centered at pickup point
+        pickup_rect = pygame.Rect(
+            pickup_px[0] - rect_width // 2,
+            pickup_px[1] - rect_height // 2,
+            rect_width,
+            rect_height
+        )
+
+        # Draw rectangle (green)
+        pygame.draw.rect(self.window, (0, 200, 0), pickup_rect)
+
+        # Draw "KITCHEN" label
+        font = pygame.font.SysFont("Arial", 16)
+        label = font.render("KITCHEN", True, (255, 255, 255))  # White text
+        label_rect = label.get_rect(center=pickup_rect.center)
+        self.window.blit(label, label_rect)
 
         # Draw agent
         agent_px = to_px(obs["agent_pos"])
@@ -219,6 +251,19 @@ class ContinuousEnvironment:
         draw_text(f"Steps: {self.steps_taken}", WINDOW_SIZE[0] - panel_width + 10, 30)
         draw_text(f"Reward: {self.cumulative_reward:.2f}", WINDOW_SIZE[0] - panel_width + 10, 50)
 
+        #Add the target table in the legend
+        if obs["current_target_table"] is None:
+            target_table_text = "Target table = None"
+        else:
+            target_idx = None
+            for idx, table in enumerate(obs["target_tables"]):
+                if np.allclose(table, obs["current_target_table"], atol=1e-2):
+                    target_idx = idx + 1  # 1-based index
+                    break
+            target_table_text = f"Target table = {target_idx}"
+
+        # Draw it below reward
+        draw_text(target_table_text, WINDOW_SIZE[0] - panel_width + 10, 70)
 
         pygame.display.flip()
         pygame.time.delay(50)
