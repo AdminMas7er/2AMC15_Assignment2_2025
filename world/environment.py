@@ -83,7 +83,8 @@ class ContinuousEnvironment:
 
         #Starting with the order already assigned (skipping pickup phase)
         self.has_order = True #starts with order
-        self.current_target_table = random.choice(self.tables)
+        # self.current_target_table = random.choice(self.tables) #later we can bring this back once it works for a fixed table
+        self.current_target_table = self.tables[2] #Fixed target table to learn quicker
 
         self.episode_start_time = time.time()
         self.steps_taken = 0
@@ -126,6 +127,7 @@ class ContinuousEnvironment:
             self.current_target_table = None
             reward = 5.0  # Reward for delivery
             done = True  # Optional, this depends on whether you want it to continue with other tables or do just one table
+            print(f"DELIVERED! Reward: {reward}, Steps taken: {self.steps_taken}")
 
         self.steps_taken += 1
         self.cumulative_reward += reward
@@ -284,8 +286,8 @@ class ContinuousEnvironment:
 
     #ADDED THIS 12/06
     def get_state_size(self):
-        # agent_pos (2), agent_angle (1), sensor_distances (3), pickup_point (2), has_order (1), current_target_table (2)
-        return 11
+        num_tables = len(self.tables)
+        return 2 + 1 + num_tables
 
     def get_action_size(self):
         return len(self.actions)

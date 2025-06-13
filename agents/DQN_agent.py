@@ -117,23 +117,27 @@ class Agent(DQNAgent):
 
     def state_to_vector(self, obs):
         agent_pos = obs["agent_pos"]  # (2,)
-        agent_angle = np.array([obs["agent_angle"]])  # (1,)
-        sensor_distances = np.array(obs["sensor_distances"])  # (3,)
-        pickup_point = obs["pickup_point"]  # (2,)
+        # agent_angle = np.array([obs["agent_angle"]])  # (1,)
+        # sensor_distances = np.array(obs["sensor_distances"])  # (3,)
+        # pickup_point = obs["pickup_point"]  # (2,)
         has_order = np.array([float(obs["has_order"])])  # (1,)
 
-        if obs["current_target_table"] is None:
-            current_target_table = np.array([0.0, 0.0])
-        else:
-            current_target_table = obs["current_target_table"]  # (2,)
+        #One hot encoding of target table
+        num_tables = len(obs["target_tables"])
+        target_idx = None
+        for idx, table in enumerate(obs["target_tables"]):
+            if np.allclose(table, obs["current_target_table"], atol=1e-2):
+                target_idx = idx
+                break
+
+        target_onehot = np.zeros(num_tables)
+        if target_idx is not None:
+            target_onehot[target_idx] = 1.0
 
         return np.concatenate([
             agent_pos,
-            agent_angle,
-            sensor_distances,
-            pickup_point,
             has_order,
-            current_target_table
+            target_onehot
         ])
 
     def take_action(self, observation):
