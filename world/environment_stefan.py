@@ -75,17 +75,25 @@ class ContinuousEnvironment:
         return tables
 
     def reset(self, pos=None, angle=0.0):
-        # Start agent at pickup point from space file
+        
         if pos is None:
             pos = self.pickup_point.copy()
         self.agent_pos = np.array(pos)
         self.agent_angle = angle
-        self.has_order = False
-        self.current_target_table = None
+
+        #Starting with the order already assigned (skipping pickup phase)
+        self.has_order = True #starts with order
+        # self.current_target_table = random.choice(self.tables) #later we can bring this back once it works for a fixed table
+        self.current_target_table = self.tables[2] #Fixed target table to learn quicker
+
         self.episode_start_time = time.time()
         self.steps_taken = 0
         self.cumulative_reward = 0.0
         print("Resetting agent_pos to pickup_point:", self.agent_pos, "pickup_point:", self.pickup_point)
+
+        # Initialize visit counter
+        self.visit_counter = {}
+
         return self._get_observation()
 
     def step(self, action):
@@ -94,8 +102,9 @@ class ContinuousEnvironment:
         dx = velocity * math.cos(self.agent_angle)
         dy = velocity * math.sin(self.agent_angle)
         new_pos = self.agent_pos + np.array([dx, dy])
-
         # Make the move if the position is not in a table and inside the map
+        reward = -0.01  # Small negative step cost
+        done = False
         if self._is_valid_position(new_pos):
             self.agent_pos = new_pos
         else:
@@ -106,22 +115,27 @@ class ContinuousEnvironment:
         if self.enable_gui:
             self._render(obs)
 
-        reward = -0.01  # Small negative step cost
-        done = False
+      
 
-        # If agent reaches the pickup point
-        if not self.has_order and np.linalg.norm(self.agent_pos - self.pickup_point) < 0.3:
-            self.has_order = True
-            self.current_target_table = random.choice(self.tables)
-            reward = 1.0  # Reward for picking up
+        # # If agent reaches the pickup point
+        # if not self.has_order and np.linalg.norm(self.agent_pos - self.pickup_point) < 0.3:
+        #     self.has_order = True
+        #     self.current_target_table = random.choice(self.tables)
+        #     reward = 1.0  # Reward for picking up
 
         # If agent reaches the delivery table
-        elif self.has_order and np.linalg.norm(self.agent_pos - self.current_target_table) < self.table_radius * 1.5:
+        if self.has_order and np.linalg.norm(self.agent_pos - self.current_target_table) < self.table_radius * 1.5:
+            print("Agent reached the target table:", self.current_target_table)
             self.has_order = False
             self.current_target_table = None
-            reward = 5.0  # Reward for delivery
+            reward = 20.0  # Reward for delivery
             done = True  # Optional
 
+        cell_size = 0.5
+        cell = tuple((self.agent_pos / cell_size).astype(int))
+        self.visit_counter[cell] = self.visit_counter.get(cell, 0) + 1
+        visit_penalty = -0.01 * (1.05 ** self.visit_counter[cell]) #Penalty for camping in the same spot
+        reward += visit_penalty
         self.steps_taken += 1
         self.cumulative_reward += reward
 
@@ -280,7 +294,8 @@ class ContinuousEnvironment:
     #ADDED THIS 12/06
     def get_state_size(self):
         # agent_pos (2), agent_angle (1), sensor_distances (3), pickup_point (2), has_order (1), current_target_table (2)
-        return 11
+        num_tables = len(self.tables)
+        return 2+1+num_tables
 
     def get_action_size(self):
         return len(self.actions)
