@@ -94,7 +94,7 @@ class ContinuousEnvironment:
 
         # Initialize visit counter
         self.visit_counter = {}
-
+        #skibidi test
         return self._get_observation()
     def get_no_deliveries(self):
         """Returns the number of successful deliveries made by the agent."""
