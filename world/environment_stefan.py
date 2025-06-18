@@ -44,6 +44,7 @@ class ContinuousEnvironment:
         self.enable_gui = enable_gui
         self.window = None
         self.screen_scale = 50
+        self.deliveries_done=0
 
         self.actions = {
             0: (0.0, 0.0), # Do nothing
@@ -95,7 +96,9 @@ class ContinuousEnvironment:
         self.visit_counter = {}
 
         return self._get_observation()
-
+    def get_no_deliveries(self):
+        """Returns the number of successful deliveries made by the agent."""
+        return self.deliveries_done
     def step(self, action):
         velocity, rotation = self.actions.get(action) # Get the action from the key
         self.agent_angle += rotation
@@ -126,6 +129,7 @@ class ContinuousEnvironment:
         # If agent reaches the delivery table
         if self.has_order and np.linalg.norm(self.agent_pos - self.current_target_table) < self.table_radius * 1.5:
             print("Agent reached the target table:", self.current_target_table)
+            self.deliveries_done += 1
             self.has_order = False
             self.current_target_table = None
             reward = 20.0  # Reward for delivery

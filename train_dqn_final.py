@@ -23,7 +23,7 @@ def parse_args():
                         help="Name of the agent module (default: random_agent)")
     parser.add_argument("--restaurant", type=Path, default=Path("grid_configs/my_first_restaurant.npz"),
                         help="Path to the .npz restaurant layout (default: my_first_restaurant.npz)")
-    parser.add_argument("--iter", type=int, default=100000, help="Number of iterations")
+    parser.add_argument("--iter", type=int, default=25000, help="Number of iterations")
     parser.add_argument("--no_gui", action="store_true", help="Disable GUI")
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
     parser.add_argument("--load_model", type=str, default=None, help="Path to load trained model (optional)")
@@ -69,13 +69,18 @@ def main():
         if next_state is None:
              agent.observe(observation, action, reward, next_state, done)
         if done:
+            print("reward for this episode:", episode_reward)
             episode_num += 1
             observation=env.reset()
+            print("episode reward after reset:", episode_reward)
             episode_rewards.append(episode_reward)
             episode_lengths.append(episode_steps)
             episode_steps=0
             episode_reward=0.0
     agent.save("trained_model.pth")
+    no_deliveries = env.get_no_deliveries()
+    print(f"Training completed after {episode_num} episodes.")
+    print(f"Total deliveries made: {no_deliveries}")
     print("Model saved to trained_model.pth")
 
     # Plot learning curves
