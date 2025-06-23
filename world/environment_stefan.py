@@ -297,9 +297,9 @@ class ContinuousEnvironment:
 
     #ADDED THIS 12/06
     def get_state_size(self):
-        # agent_pos (2), agent_angle (1), sensor_distances (3), pickup_point (2), has_order (1), current_target_table (2)
+        # agent_pos (2), agent_angle (1), sensor_distances (3), has_order (1), current_target_table (2)
         num_tables = len(self.tables)
-        return 2+1+num_tables
+        return 9
 
     def get_action_size(self):
         return len(self.actions)

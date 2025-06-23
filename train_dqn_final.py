@@ -23,7 +23,7 @@ def parse_args():
                         help="Name of the agent module (default: random_agent)")
     parser.add_argument("--restaurant", type=Path, default=Path("grid_configs/my_first_restaurant.npz"),
                         help="Path to the .npz restaurant layout (default: my_first_restaurant.npz)")
-    parser.add_argument("--iter", type=int, default=25000, help="Number of iterations")
+    parser.add_argument("--iter", type=int, default=10, help="Number of iterations")
     parser.add_argument("--no_gui", action="store_true", help="Disable GUI")
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
     parser.add_argument("--load_model", type=str, default=None, help="Path to load trained model (optional)")
@@ -51,23 +51,26 @@ def main():
     episode_num = 0
     episode_steps = 0
     episode_reward = 0.0
-    max_episode_steps = 3000
+    max_episode_steps = 1500
 
     episode_rewards = []
     episode_lengths = []
-    for _ in trange(args.iter):
+    while episode_num < args.iter:
         # if observation is None:
         #     observation=env._get_observation()
         #     continue
-        action=agent.action(observation,epsilon=agent.epsilon)
+        current=observation
+        action=agent.action(current,epsilon=agent.epsilon)
         next_state, reward, done,_ = env.step(action)
         episode_steps += 1
         episode_reward += reward
-        if episode_steps>= max_episode_steps:
+        if episode_steps>= max_episode_steps or episode_reward < -1000:
             done=True
+        agent.observe(current, action, reward, next_state, done)
         observation=next_state
         if next_state is None:
-             agent.observe(observation, action, reward, next_state, done)
+            print("next state is None, skipping the state update")
+            continue
         if done:
             print("reward for this episode:", episode_reward)
             episode_num += 1
