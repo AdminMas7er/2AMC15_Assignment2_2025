@@ -45,7 +45,7 @@ class ContinuousEnvironment:
         self.window = None
         self.screen_scale = 50
         self.deliveries_done=0
-
+        self.current_episode=0
         self.actions = {
             0: (0.0, 0.0), # Do nothing
             1: (0.0, STEP_ROTATION), # Rotate right
@@ -74,7 +74,8 @@ class ContinuousEnvironment:
             y = self.random.uniform(self.table_radius, self.height - self.table_radius)
             tables.append(np.array([x, y]))
         return tables
-
+    def set_episode(self, episode):
+        self.current_episode = episode
     def reset(self, pos=None, angle=0.0):
         
         if pos is None:
