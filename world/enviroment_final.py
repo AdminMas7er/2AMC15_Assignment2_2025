@@ -14,7 +14,7 @@ BACKGROUND_COLOR = (255, 255, 255)
 SENSOR_COLOR = (150, 150, 150)
 
 # Pre-defined step size and rotation
-STEP_LENGTH = 1.0
+STEP_LENGTH = 0.1
 STEP_ROTATION = np.radians(30)
 
 class ContinuousEnvironment:
@@ -238,17 +238,17 @@ class ContinuousEnvironment:
         agent_px = to_px(obs["agent_pos"])
         pygame.draw.circle(self.window, AGENT_COLOR, agent_px, 10)
 
-        # Draw sensors
-        for i, angle in enumerate(self.sensor_angles):
-            sensor_distance = obs["sensor_distances"][i]
-            sensor_end = obs["agent_pos"] + sensor_distance * np.array([
-                math.cos(obs["agent_angle"] + angle),
-                math.sin(obs["agent_angle"] + angle)
-            ])
-            pygame.draw.line(
-                self.window, SENSOR_COLOR,
-                agent_px, to_px(sensor_end), 1
-            )
+        # # Draw sensors
+        # for i, angle in enumerate(self.sensor_angles):
+        #     sensor_distance = obs["sensor_distances"][i]
+        #     sensor_end = obs["agent_pos"] + sensor_distance * np.array([
+        #         math.cos(obs["agent_angle"] + angle),
+        #         math.sin(obs["agent_angle"] + angle)
+        #     ])
+        #     pygame.draw.line(
+        #         self.window, SENSOR_COLOR,
+        #         agent_px, to_px(sensor_end), 1
+        #     )
 
         # Draw metrics on the right
         panel_width = 200
