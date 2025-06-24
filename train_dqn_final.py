@@ -6,7 +6,7 @@ import random
 import torch
 import matplotlib.pyplot as plt
 try:
-    from world.environment_stefan import ContinuousEnvironment
+    from world.enviroment_final import ContinuousEnvironment
     from world.continuous_space import ContinuousSpace
 except ModuleNotFoundError:
     import sys
@@ -14,7 +14,7 @@ except ModuleNotFoundError:
     root_path = path.abspath(path.join(path.join(path.abspath(__file__), pardir), pardir))
     if root_path not in sys.path:
         sys.path.append(root_path)
-    from world.environment_stefan import ContinuousEnvironment
+    from world.enviroment_final import ContinuousEnvironment
     from world.continuous_space import ContinuousSpace
 from agents.dqn_final import DQNAgent
 def parse_args():
