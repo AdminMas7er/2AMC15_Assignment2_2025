@@ -33,44 +33,57 @@ class DQNAgent:
         self.epsilon_decay = epsilon_decay
         self.capacity = buffer_size
         self.lr = learning_rate
-        self.q_network = DQN_Network(state_size, action_size)
-        self.q_network.to(self.device)  
-        self.target_network = DQN_Network(state_size, action_size)
-        self.target_network.to(self.device)
+        self.q_network = DQN_Network(state_size, action_size).to(self.device)
+        self.target_network = DQN_Network(state_size, action_size).to(self.device)
         self.replay_buffer = ReplayBuffer(self.capacity, self.batch_size)
         self.target_network.load_state_dict(self.q_network.state_dict())
         self.target_network.eval()
         self.optimizer = optim.Adam(self.q_network.parameters(), lr=self.lr)
         self.train_step = 0
-    def action(self,state,epsilon): 
+    def state_to_vector(self, obs):
+            # Handle the case where the entire observation is None (e.g., terminal next_state)
+            if obs is None:
+                # Return a zero vector of the correct size.
+                return np.zeros(self.state_size, dtype=np.float32)
+
+            agent_pos = np.array(obs["agent_pos"], dtype=np.float32)
+            # has_order = np.array([float(obs["has_order"])]) # This was commented out, but might be useful
+
+            #One hot encoding of target table
+            num_tables = len(obs["target_tables"])
+            target_onehot = np.zeros(num_tables, dtype=np.float32)
+            
+            # Only search for a target if one exists
+            current_target = obs.get("current_target_table")
+            if current_target is not None:
+                for idx, table in enumerate(obs["target_tables"]):
+                    if np.allclose(table, current_target, atol=1e-2):
+                        target_onehot[idx] = 1.0
+                        break
+
+            return np.concatenate([
+                agent_pos,
+                target_onehot
+                ]).astype(np.float32) # Ensure final type is float32
+
+    def action(self,state,epsilon):
+        state_vector = self.state_to_vector(state) 
         if random.random() < epsilon:
             return random.randint(0, self.action_size - 1)
         else:
-            state_tensor = torch.FloatTensor(state).unsqueeze(0).to(self.device)  # Ensure state is on the correct device
+            state_tensor = torch.FloatTensor(state_vector).unsqueeze(0).to(self.device)  # Ensure state is on the correct device
             with torch.no_grad():
                 q_values = self.q_network(state_tensor)
-            return int(q_values.argmax(dim=1 ).item())
+            return int(q_values.argmax(dim=1).item())
     def observe(self,state,action,reward,next_state,done):
-        self.replay_buffer.store(state, action, reward, next_state, float(done))
+        state_vector = self.state_to_vector(state)
+        next_state_vector = self.state_to_vector(next_state)
+        self.replay_buffer.store(state_vector, action, reward, next_state_vector, float(done))
         self.optimize()
     def optimize(self):
         if len(self.replay_buffer) < self.batch_size:
             return
         batch = self.replay_buffer.sample()
-        # valid_batch = []
-        # for trans in batch:
-        #     s, a, r, ns = trans
-        #     if (
-        #             s is not None and
-        #             ns is not None and
-        #             isinstance(s, np.ndarray) and
-        #             isinstance(ns, np.ndarray) and
-        #             s.size > 0 and
-        #             ns.size > 0 and
-        #             not np.any(np.isnan(s)) and
-        #             not np.any(np.isnan(ns))
-        #     ):
-        #         valid_batch.append(trans)
         state_batch, action_batch, reward_batch, next_state_batch,done_batch = zip(*batch)
         state_tensor = torch.FloatTensor(np.array(state_batch)).to(self.device)
         action_tensor = torch.LongTensor(action_batch).unsqueeze(1).to(self.device)
@@ -123,54 +136,3 @@ class DQNAgent:
             print(f"Model loaded from {model_file_path}")
         else:
             print(f"Warning: Model file not found at {model_file_path}")
-# class Agent(DQNAgent):
-#         def __init__(self, state_size, action_size):
-#             super().__init__(state_size, action_size)
-
-#         def state_to_vector(self, obs):
-#             agent_pos = obs["agent_pos"]  # (2,)
-#             # agent_angle = np.array([obs["agent_angle"]])  # (1,)
-#             # sensor_distances = np.array(obs["sensor_distances"])  # (3,)
-#             # pickup_point = obs["pickup_point"]  # (2,)
-#             has_order = np.array([float(obs["has_order"])])  # (1,)
-
-#             #One hot encoding of target table
-#             num_tables = len(obs["target_tables"])
-#             target_idx = None
-#             for idx, table in enumerate(obs["target_tables"]):
-#                 if np.allclose(table, obs["current_target_table"], atol=1e-2):
-#                     target_idx = idx
-#                     break
-
-#             target_onehot = np.zeros(num_tables)
-#             if target_idx is not None:
-#                 target_onehot[target_idx] = 1.0
-
-#             return np.concatenate([
-#                 agent_pos,
-#                 has_order,
-#                 target_onehot
-#             ])
-
-      
-#         def take_action(self, observation): # This is called by train_dqn_final.py
-#              state_vector = self.state_to_vector(observation)
-#              return self.select_action(state_vector)
-
-   
-#         def observe_transition(self, state, action, reward, next_state, done):
-#             state_vector = self.state_to_vector(state)
-#             next_state_vector = self.state_to_vector(next_state)
-
-#             valid = all([
-#                 state_vector is not None,
-#                 next_state_vector is not None,
-#                 not np.any(np.isnan(state_vector)),
-#                 not np.any(np.isnan(next_state_vector)),
-#                 state_vector.size > 0,
-#                 next_state_vector.size > 0
-#             ])
-
-#             if valid:
-#                 self.remember(state_vector, action, reward, next_state_vector)
-#                 self.train()

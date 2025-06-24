@@ -14,7 +14,7 @@ BACKGROUND_COLOR = (255, 255, 255)
 SENSOR_COLOR = (150, 150, 150)
 
 # Pre-defined step size and rotation
-STEP_LENGTH = 0.1
+STEP_LENGTH = 1.0
 STEP_ROTATION = np.radians(30)
 
 class ContinuousEnvironment:
@@ -45,7 +45,7 @@ class ContinuousEnvironment:
         self.window = None
         self.screen_scale = 50
         self.deliveries_done=0
-
+        self.current_episode=0
         self.actions = {
             0: (0.0, 0.0), # Do nothing
             1: (0.0, STEP_ROTATION), # Rotate right
@@ -74,7 +74,8 @@ class ContinuousEnvironment:
             y = self.random.uniform(self.table_radius, self.height - self.table_radius)
             tables.append(np.array([x, y]))
         return tables
-
+    def set_episode(self, episode):
+        self.current_episode = episode
     def reset(self, pos=None, angle=0.0):
         
         if pos is None:
@@ -84,8 +85,8 @@ class ContinuousEnvironment:
 
         #Starting with the order already assigned (skipping pickup phase)
         self.has_order = True #starts with order
-        # self.current_target_table = random.choice(self.tables) #later we can bring this back once it works for a fixed table
-        self.current_target_table = self.tables[2] #Fixed target table to learn quicker
+        self.current_target_table = random.choice(self.tables) #later we can bring this back once it works for a fixed table
+        # self.current_target_table = self.tables[2] #Fixed target table to learn quicker
 
         self.episode_start_time = time.time()
         self.steps_taken = 0
@@ -94,7 +95,7 @@ class ContinuousEnvironment:
 
         # Initialize visit counter
         self.visit_counter = {}
-
+        #skibidi test
         return self._get_observation()
     def get_no_deliveries(self):
         """Returns the number of successful deliveries made by the agent."""
@@ -170,14 +171,9 @@ class ContinuousEnvironment:
         return self.max_sensor_range
 
     def _get_observation(self):
-        distances = [self._get_sensor_distance(a) for a in self.sensor_angles]
         return {
             "agent_pos": self.agent_pos.copy(),
-            "agent_angle": self.agent_angle,
-            "sensor_distances": distances,
-            "target_tables": self.tables.copy(),
-            "pickup_point": self.pickup_point,
-            "has_order": self.has_order,
+            "target_tables": self.tables.copy(), 
             "current_target_table": self.current_target_table,
         }
 
@@ -297,9 +293,9 @@ class ContinuousEnvironment:
 
     #ADDED THIS 12/06
     def get_state_size(self):
-        # agent_pos (2), agent_angle (1), sensor_distances (3), pickup_point (2), has_order (1), current_target_table (2)
-        num_tables = len(self.tables)
-        return 2+1+num_tables
+        n_tables = len(self.tables)
+        # State vector: agent position (2), target table one-hot encoding (n_tables)
+        return 2 + n_tables
 
     def get_action_size(self):
         return len(self.actions)
