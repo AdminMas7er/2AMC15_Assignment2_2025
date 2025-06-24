@@ -61,7 +61,7 @@ def main():
     episode_num = 0
     episode_steps = 0
     episode_reward = 0.0
-    max_episode_steps = 300
+    max_episode_steps = 1500
 
     episode_rewards = []
     episode_lengths = []

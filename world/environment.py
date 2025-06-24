@@ -14,7 +14,7 @@ BACKGROUND_COLOR = (255, 255, 255)
 SENSOR_COLOR = (150, 150, 150)
 
 # Pre-defined step size and rotation
-STEP_LENGTH = 0.1
+STEP_LENGTH = 1
 STEP_ROTATION = np.radians(30)
 
 class ContinuousEnvironment:
@@ -84,7 +84,7 @@ class ContinuousEnvironment:
         #Starting with the order already assigned (skipping pickup phase)
         self.has_order = True #starts with order
         # self.current_target_table = random.choice(self.tables) #later we can bring this back once it works for a fixed table
-        self.current_target_table = self.tables[2] #Fixed target table to learn quicker
+        self.current_target_table = self.tables[0] #Fixed target table to learn quicker
 
         self.episode_start_time = time.time()
         self.steps_taken = 0
