@@ -21,9 +21,9 @@ class DQNAgent:
     def __init__(self, state_size, action_size):
         self.gamma = 0.99
         self.epsilon = 1.0
-        self.epsilon_decay = 0.995
+        self.epsilon_decay = 0.95
         self.epsilon_min = 0.05
-        self.batch_size = 64
+        self.batch_size = 16
         self.memory_size = 10000
         self.target_update_frequency = 4
         self.learning_rate = 1e-4
@@ -120,7 +120,7 @@ class Agent(DQNAgent):
 
     def state_to_vector(self, obs):
         agent_pos = obs["agent_pos"]  # (2,)
-        # agent_angle = np.array([obs["agent_angle"]])  # (1,)
+        agent_angle = np.array([obs["agent_angle"]])  # (1,)
         # sensor_distances = np.array(obs["sensor_distances"])  # (3,)
         # pickup_point = obs["pickup_point"]  # (2,)
         has_order = np.array([float(obs["has_order"])])  # (1,)

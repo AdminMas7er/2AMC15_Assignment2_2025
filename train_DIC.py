@@ -89,7 +89,7 @@ def main():
         if next_state is not None:
             agent.observe_transition(observation, action, reward, next_state, done)
 
-        observation = next_state
+        # observation = next_state
 
         if done:
             episode_num += 1
