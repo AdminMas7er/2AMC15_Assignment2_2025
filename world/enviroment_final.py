@@ -14,7 +14,7 @@ BACKGROUND_COLOR = (255, 255, 255)
 SENSOR_COLOR = (150, 150, 150)
 
 # Pre-defined step size and rotation
-STEP_LENGTH = 0.1
+STEP_LENGTH = 1.0
 STEP_ROTATION = np.radians(30)
 
 class ContinuousEnvironment:
@@ -171,14 +171,9 @@ class ContinuousEnvironment:
         return self.max_sensor_range
 
     def _get_observation(self):
-        distances = [self._get_sensor_distance(a) for a in self.sensor_angles]
         return {
             "agent_pos": self.agent_pos.copy(),
-            "agent_angle": self.agent_angle,
-            "sensor_distances": distances,
-            "target_tables": self.tables.copy(),
-            "pickup_point": self.pickup_point,
-            "has_order": self.has_order,
+            "target_tables": self.tables.copy(), 
             "current_target_table": self.current_target_table,
         }
 
@@ -298,9 +293,9 @@ class ContinuousEnvironment:
 
     #ADDED THIS 12/06
     def get_state_size(self):
-        # agent_pos (2), agent_angle (1), sensor_distances (3), has_order (1), current_target_table (2)
-        num_tables = len(self.tables)
-        return 9
+        n_tables = len(self.tables)
+        # State vector: agent position (2), target table one-hot encoding (n_tables)
+        return 2 + n_tables
 
     def get_action_size(self):
         return len(self.actions)

@@ -40,49 +40,44 @@ class DQNAgent:
         self.target_network.eval()
         self.optimizer = optim.Adam(self.q_network.parameters(), lr=self.lr)
         self.train_step = 0
-    def _convert_obs_to_vector(self, obs_dict):
-        """Converts a dictionary observation into a 9-element NumPy vector."""
-        if obs_dict is None:
-            # Return a zero vector of the correct size if observation is None
-            return np.zeros(self.state_size, dtype=np.float32)
+    def state_to_vector(self, obs):
+            # Handle the case where the entire observation is None (e.g., terminal next_state)
+            if obs is None:
+                # Return a zero vector of the correct size.
+                return np.zeros(self.state_size, dtype=np.float32)
 
-        # 1. Extract the values from the dictionary
-        agent_pos = obs_dict["agent_pos"]
-        agent_angle = obs_dict["agent_angle"]
-        sensor_distances = obs_dict["sensor_distances"]
-        has_order = obs_dict["has_order"]
-        current_target_table = obs_dict["current_target_table"]
+            agent_pos = np.array(obs["agent_pos"], dtype=np.float32)
+            # has_order = np.array([float(obs["has_order"])]) # This was commented out, but might be useful
 
-        # 2. Handle cases where values might be None or need type conversion
-        if current_target_table is None:
-            current_target_table = [0.0, 0.0] # Use a default value
+            #One hot encoding of target table
+            num_tables = len(obs["target_tables"])
+            target_onehot = np.zeros(num_tables, dtype=np.float32)
+            
+            # Only search for a target if one exists
+            current_target = obs.get("current_target_table")
+            if current_target is not None:
+                for idx, table in enumerate(obs["target_tables"]):
+                    if np.allclose(table, current_target, atol=1e-2):
+                        target_onehot[idx] = 1.0
+                        break
 
-        # 3. Create a single, flat NumPy array in a fixed order
-        state_vector = np.concatenate([
-            np.array(agent_pos, dtype=np.float32),
-            np.array([agent_angle], dtype=np.float32),
-            np.array(sensor_distances, dtype=np.float32),
-            np.array([has_order], dtype=np.float32),
-            np.array(current_target_table, dtype=np.float32)
-        ])
-        return state_vector
+            return np.concatenate([
+                agent_pos,
+                target_onehot
+                ]).astype(np.float32) # Ensure final type is float32
+
     def action(self,state,epsilon):
-        if state is None:
-            return random.randint(0, self.action_size - 1)
-
-        state_vector = self._convert_obs_to_vector(state)
-
+        state_vector = self.state_to_vector(state) 
         if random.random() < epsilon:
             return random.randint(0, self.action_size - 1)
         else:
-            state_tensor = torch.FloatTensor(state_vector).unsqueeze(0).to(self.device)
+            state_tensor = torch.FloatTensor(state_vector).unsqueeze(0).to(self.device)  # Ensure state is on the correct device
             with torch.no_grad():
                 q_values = self.q_network(state_tensor)
             return int(q_values.argmax(dim=1).item())
     def observe(self,state,action,reward,next_state,done):
-        state_vector = self._convert_obs_to_vector(state)
-        next_state_vector = self._convert_obs_to_vector(next_state)
-
+        state_vector = self.state_to_vector(state)
+        next_state_vector = self.state_to_vector(next_state)
         self.replay_buffer.store(state_vector, action, reward, next_state_vector, float(done))
         self.optimize()
     def optimize(self):
