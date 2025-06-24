@@ -8,131 +8,183 @@ from collections import deque, namedtuple
 from agents.replaybuffer import ReplayBuffer
 from pathlib import Path
 
+def kaiming_init(m: nn.Module):
+    """He‑uniform init for linear layers."""
+    if isinstance(m, nn.Linear):
+        nn.init.kaiming_uniform_(m.weight, nonlinearity="relu")
+        nn.init.constant_(m.bias, 0)
+
 class DQN_Network(nn.Module):
-    def __init__(self, input_size,output_size):
-        super(DQN_Network, self).__init__()
+    def __init__(self, input_size: int, output_size: int):
+        super().__init__()
         self.fc1 = nn.Linear(input_size, 128)
         self.fc2 = nn.Linear(128, 128)
         self.fc3 = nn.Linear(128, output_size)
-    def forward(self, state): 
-        x = F.relu(self.fc1(state)) 
+        self.apply(kaiming_init)
+
+    def forward(self, state):
+        x = F.relu(self.fc1(state))
         x = F.relu(self.fc2(x))
-        return self.fc3(x) 
+        return self.fc3(x)
+    
 class DQNAgent:
-    def __init__(self, state_size, action_size, target_update_freq, gamma, batch_size,
-                 epsilon_start, epsilon_end, epsilon_decay, buffer_size,
-                 learning_rate,device):
-        self.device=device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    def __init__(
+        self,
+        state_size: int,
+        action_size: int,
+        map_width: float,
+        map_height: float,
+        target_update_freq: int = 1000,
+        gamma: float = 0.99,
+        batch_size: int = 64,
+        epsilon_start: float = 1.0,
+        epsilon_end: float = 0.05,
+        epsilon_decay: float = 0.995,
+        buffer_size: int = 100_000,
+        learning_rate: float = 1e-3,
+        device: torch.device | None = None,
+        seed: int = 42,
+        num_tables: int | None = None,
+    ):
+        random.seed(seed)
+        np.random.seed(seed)
+        torch.manual_seed(seed)
+
+        self.device = device if device is not None else (
+            torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        )
         self.state_size = state_size
         self.action_size = action_size
+        self.num_tables  = (num_tables if num_tables is not None
+                            else state_size - 4)
         self.gamma = gamma
         self.batch_size = batch_size
         self.target_update_freq = target_update_freq
         self.epsilon = epsilon_start
         self.epsilon_end = epsilon_end
         self.epsilon_decay = epsilon_decay
-        self.capacity = buffer_size
-        self.lr = learning_rate
         self.q_network = DQN_Network(state_size, action_size).to(self.device)
         self.target_network = DQN_Network(state_size, action_size).to(self.device)
-        self.replay_buffer = ReplayBuffer(self.capacity, self.batch_size)
         self.target_network.load_state_dict(self.q_network.state_dict())
         self.target_network.eval()
-        self.optimizer = optim.Adam(self.q_network.parameters(), lr=self.lr)
+        self.optimizer = optim.Adam(self.q_network.parameters(), lr=learning_rate)
+        self.replay_buffer = ReplayBuffer(buffer_size, batch_size)
         self.train_step = 0
-    def state_to_vector(self, obs):
-            # Handle the case where the entire observation is None (e.g., terminal next_state)
-            if obs is None:
-                # Return a zero vector of the correct size.
-                return np.zeros(self.state_size, dtype=np.float32)
+        self.map_range = np.array([map_width, map_height], dtype=np.float32)
+        
+    def state_to_vector(self, obs: dict | None):
+        if obs is None:  # terminal placeholder
+            return np.zeros(self.state_size, dtype=np.float32)
+    
+        # 1) position (x, y)  ->  0-1 range
+        pos = np.asarray(obs["agent_pos"], dtype=np.float32)
+        pos_norm = pos / self.map_range           # ← NEW
+    
+        # 2) heading (cosθ, sinθ) already in [-1, 1]
+        heading = np.asarray(obs["heading"], dtype=np.float32)
+    
+        # 3) one-hot target id
+        onehot = np.zeros(self.num_tables, dtype=np.float32)
+        tid = int(obs["current_target"])
+        if 0 <= tid < self.num_tables:
+            onehot[tid] = 1.0
+    
+        return np.concatenate([pos_norm, heading, onehot]).astype(np.float32)
 
-            agent_pos = np.array(obs["agent_pos"], dtype=np.float32)
-            # has_order = np.array([float(obs["has_order"])]) # This was commented out, but might be useful
 
-            #One hot encoding of target table
-            num_tables = len(obs["target_tables"])
-            target_onehot = np.zeros(num_tables, dtype=np.float32)
-            
-            # Only search for a target if one exists
-            current_target = obs.get("current_target_table")
-            if current_target is not None:
-                for idx, table in enumerate(obs["target_tables"]):
-                    if np.allclose(table, current_target, atol=1e-2):
-                        target_onehot[idx] = 1.0
-                        break
 
-            return np.concatenate([
-                agent_pos,
-                target_onehot
-                ]).astype(np.float32) # Ensure final type is float32
+    # -------------------------------------------
+    #  epsilon‑greedy action
+    # -------------------------------------------
+    def action(self, state: dict):
+        eps = self.epsilon  # use current epsilon
+        self.epsilon = max(self.epsilon_end, self.epsilon * self.epsilon_decay)
 
-    def action(self,state,epsilon):
-        state_vector = self.state_to_vector(state) 
-        if random.random() < epsilon:
-            return random.randint(0, self.action_size - 1)
-        else:
-            state_tensor = torch.FloatTensor(state_vector).unsqueeze(0).to(self.device)  # Ensure state is on the correct device
-            with torch.no_grad():
-                q_values = self.q_network(state_tensor)
-            return int(q_values.argmax(dim=1).item())
-    def observe(self,state,action,reward,next_state,done):
-        state_vector = self.state_to_vector(state)
-        next_state_vector = self.state_to_vector(next_state)
-        self.replay_buffer.store(state_vector, action, reward, next_state_vector, float(done))
+        if random.random() < eps:
+            return random.randrange(self.action_size)
+        state_v = torch.as_tensor(self.state_to_vector(state), device=self.device).unsqueeze(0)
+        with torch.no_grad():
+            q_vals = self.q_network(state_v)
+        return int(q_vals.argmax(dim=1).item())
+
+    # -------------------------------------------
+    #  store transition & train
+    # -------------------------------------------
+    def observe(self, s, a, r, s2, done):
+        self.replay_buffer.store(
+            self.state_to_vector(s),
+            a,
+            r,
+            self.state_to_vector(s2),
+            float(done),
+        )
         self.optimize()
+
+    # -------------------------------------------
+    #  optimize single batch
+    # -------------------------------------------
     def optimize(self):
         if len(self.replay_buffer) < self.batch_size:
             return
-        batch = self.replay_buffer.sample()
-        state_batch, action_batch, reward_batch, next_state_batch,done_batch = zip(*batch)
-        state_tensor = torch.FloatTensor(np.array(state_batch)).to(self.device)
-        action_tensor = torch.LongTensor(action_batch).unsqueeze(1).to(self.device)
-        reward_tensor = torch.FloatTensor(reward_batch).unsqueeze(1).to(self.device)
-        next_state_tensor = torch.FloatTensor(np.array(next_state_batch)).to(self.device)
-        done_tensor = torch.FloatTensor(done_batch).unsqueeze(1).to(self.device)
-        current_q_values = self.q_network(state_tensor).gather(1, action_tensor)
+    
+        states, actions, rewards, next_states, dones = map(
+            np.array, zip(*self.replay_buffer.sample())
+        )
+        s  = torch.as_tensor(states,       device=self.device)
+        a  = torch.as_tensor(actions,      device=self.device).unsqueeze(1)
+        r  = torch.as_tensor(rewards,      device=self.device).unsqueeze(1)
+        s2 = torch.as_tensor(next_states,  device=self.device)
+        d  = torch.as_tensor(dones,        device=self.device).unsqueeze(1)
+    
+        # --------------------- TD target & loss ---------------------------
+        q_curr = self.q_network(s).gather(1, a)
         with torch.no_grad():
-            next_q_values = self.target_network(next_state_tensor).max(1)[0].unsqueeze(1)
-            target_q_values=reward_tensor+self.gamma*next_q_values*(1-done_tensor)
-        loss = F.mse_loss(current_q_values, target_q_values)
+            q_next = self.target_network(s2).max(1)[0].unsqueeze(1)
+            q_tgt  = r + self.gamma * q_next * (1 - d)
+    
+        loss = F.smooth_l1_loss(q_curr, q_tgt)
         self.optimizer.zero_grad()
         loss.backward()
         nn.utils.clip_grad_norm_(self.q_network.parameters(), 1.0)
         self.optimizer.step()
+    
+        # --------------------- bookkeeping -------------------------------
+        self.last_loss = loss.item()                    
+    
         self.train_step += 1
         if self.train_step % self.target_update_freq == 0:
             self.target_network.load_state_dict(self.q_network.state_dict())
-        self.epsilon = max(self.epsilon_end, self.epsilon * self.epsilon_decay)
-    def save(self, path: Path): # Ensure path is a Path object or string directory
-        # Determine the full file path for the model
-        if isinstance(path, str): # If path is a string, convert to Path
-            path = Path(path)
-        
-        # If the provided path is a directory, append a default model name
-        if path.is_dir():
-            model_file_path = path / "dqn_model.pth"
-        else: # Otherwise, assume path is the full desired file path
-            model_file_path = path
-            
-        # Ensure the parent directory exists
-        model_file_path.parent.mkdir(parents=True, exist_ok=True)
-        
-        torch.save(self.q_network.state_dict(), model_file_path) # Changed from self.model_net
-        print(f"Model saved to {model_file_path}")
 
-    def load(self, path): # path can be string or Path, to directory or file
-        if isinstance(path, str):
-            path = Path(path)
-        
-        if path.is_dir():
-            model_file_path = path / "dqn_model.pth"
-        else: # Assumes path is the full file path
-            model_file_path = path
-            
-        if model_file_path.exists():
-            self.q_network.load_state_dict(torch.load(model_file_path, map_location=self.device)) # Changed from self.model_net
-            self.target_network.load_state_dict(self.q_network.state_dict()) # Changed from self.model_net to self.q_network
-            self.q_network.eval() # Set q_network to eval mode, target_network is already in eval
-            print(f"Model loaded from {model_file_path}")
-        else:
-            print(f"Warning: Model file not found at {model_file_path}")
+    # -------------------------------------------
+    #  save / load
+    # -------------------------------------------
+    def save(self, path: str | Path):
+        p = Path(path)
+        if p.is_dir():
+            p = p / "dqn_model.pth"
+        p.parent.mkdir(parents=True, exist_ok=True)
+        torch.save({
+            "q": self.q_network.state_dict(),
+            "target": self.target_network.state_dict(),
+            "optim": self.optimizer.state_dict(),
+            "epsilon": self.epsilon,
+            "step": self.train_step,
+        }, p)
+        print(f"Model saved to {p}")
+
+    def load(self, path: str | Path):
+        p = Path(path)
+        if p.is_dir():
+            p = p / "dqn_model.pth"
+        if not p.exists():
+            print(f"[WARN] No checkpoint at {p}")
+            return
+        ckpt = torch.load(p, map_location=self.device)
+        self.q_network.load_state_dict(ckpt["q"])
+        self.target_network.load_state_dict(ckpt["target"])
+        self.optimizer.load_state_dict(ckpt["optim"])
+        self.epsilon = ckpt.get("epsilon", self.epsilon)
+        self.train_step = ckpt.get("step", 0)
+        self.q_network.eval(); self.target_network.eval()
+        print(f"Model loaded from {p}")
+
