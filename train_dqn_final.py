@@ -40,7 +40,7 @@ def main():
     device=torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     agent=DQNAgent(state_size=env.get_state_size(), action_size=env.get_action_size(),
-                   target_update_freq=4, gamma=0.99, batch_size=128,
+                   target_update_freq=4, gamma=0.99, batch_size=16,
                    epsilon_start=1.0, epsilon_end=0.01, epsilon_decay=0.995,
                    buffer_size=10000, learning_rate=1e-4,device=device)
     if args.load_model:
