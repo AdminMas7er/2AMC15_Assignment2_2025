@@ -14,7 +14,7 @@ BACKGROUND_COLOR = (255, 255, 255)
 SENSOR_COLOR = (150, 150, 150)
 
 # Pre-defined step size and rotation
-STEP_LENGTH = 0.1
+STEP_LENGTH = 0.5
 STEP_ROTATION = np.radians(30)
 
 class ContinuousEnvironment:
@@ -109,6 +109,15 @@ class ContinuousEnvironment:
         # Make the move if the position is not in a table and inside the map
         reward = -0.01  # Small negative step cost
         done = False
+
+        # Encourage moving forward
+        if action == 3:
+            reward += 0.02
+
+        # Discourage spinning
+        if action in (1, 2):
+            reward -= 0.01
+
         if self._is_valid_position(new_pos):
             self.agent_pos = new_pos
         else:
