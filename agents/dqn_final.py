@@ -98,6 +98,7 @@ class DQNAgent:
     # -------------------------------------------
     def action(self, state: dict):
         eps = self.epsilon  # use current epsilon
+        self.epsilon = max(self.epsilon_end, self.epsilon * self.epsilon_decay)
 
         if random.random() < eps:
             return random.randrange(self.action_size)

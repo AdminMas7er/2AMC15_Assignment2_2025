@@ -5,6 +5,7 @@ from pathlib import Path
 import pygame
 from world.continuous_space import ContinuousSpace 
 
+
 # ------------------------------
 #  Global visual parameters
 # ------------------------------

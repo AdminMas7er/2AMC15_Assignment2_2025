@@ -66,12 +66,12 @@ def main() -> None:
         num_tables      = len(env.tables),        
         target_update_freq = 1000,
         gamma           = 0.99,
-        batch_size      = 128,
+        batch_size      = 64,
         epsilon_start   = 1.0,
         epsilon_end     = 0.05,
-        epsilon_decay   = 0.995,
+        epsilon_decay   = 0.999,
         buffer_size     = 100_000,
-        learning_rate   = 1e-4,
+        learning_rate   = 2e-4,
         device          = device,
         seed            = args.seed,
     )
@@ -99,7 +99,7 @@ def main() -> None:
     # ------------------------------------------------------------------ #
     #  Training hyper-parameters
     # ------------------------------------------------------------------ #
-    MAX_STEPS_LONG, MAX_STEPS_SHORT = 4000, 1000
+    MAX_STEPS_LONG, MAX_STEPS_SHORT = 5000, 2000
     LOG_EVERY = 20                               
 
     rewards, lengths, succ_flags = [], [], []
@@ -107,7 +107,7 @@ def main() -> None:
 
     with trange(args.episodes, desc="Episodes") as pbar:
         for ep in pbar:
-            max_steps = MAX_STEPS_LONG if ep < 40 else MAX_STEPS_SHORT
+            max_steps = MAX_STEPS_LONG if ep < 60 else MAX_STEPS_SHORT
             ep_r, ep_len, done = 0.0, 0, False
             deliveries_before = env.deliveries_done
             collisions = 0
@@ -122,9 +122,6 @@ def main() -> None:
                 obs, ep_r, ep_len = nxt, ep_r + r, ep_len + 1
                 if ep_len >= max_steps:
                     done = True
-                    
-            if agent.epsilon > agent.epsilon_end:
-                agent.epsilon *= agent.epsilon_decay
 
             # ---------- episode end stats ----------
             rewards.append(ep_r)
