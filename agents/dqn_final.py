@@ -36,7 +36,7 @@ class DQNAgent:
         map_height: float,
         target_update_freq: int = 1000,
         gamma: float = 0.99,
-        batch_size: int = 64,
+        batch_size: int = 128,
         epsilon_start: float = 1.0,
         epsilon_end: float = 0.05,
         epsilon_decay: float = 0.995,
