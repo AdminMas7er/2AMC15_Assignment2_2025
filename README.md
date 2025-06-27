@@ -64,7 +64,9 @@ usage: train_dqn.py --restaurant RESTAURANT [--episodes EPISODES]
 * `--no_gui`: Disable the visual GUI window during training (useful for faster headless training).
 * `--seed`: Set the random seed for reproducibility.
 * `--load_model`: Load a previously trained model (used to resume training or run in demo mode).
-* `--demo`: Run the loaded model in inference mode (no learning or exploration).
+* `--demo_mode`: Run the loaded model in inference mode (no learning or exploration).
+* `--learning_rate`: Sets the learning rate of the model
+* `--table_radius`: Sets the radius of the tables in the enviroment
 
 #### Example usage:
 
@@ -98,7 +100,7 @@ usage: train_sac.py [--restaurant RESTAURANT] [--episodes EPISODES]
                     [--max_steps MAX_STEPS] [--eval_freq EVAL_FREQ]
                     [--eval_episodes EVAL_EPISODES] [--no_gui]
                     [--render_eval] [--seed SEED]
-                    [--output_dir OUTPUT_DIR] [--load_model MODEL]
+                    [--output_dir OUTPUT_DIR] [--load_model MODEL] [--table_radius TABLE RADIUS]
 
 SAC Hyperparameters:
   --lr LR
