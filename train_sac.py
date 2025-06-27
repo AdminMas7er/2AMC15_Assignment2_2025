@@ -125,7 +125,7 @@ def plot_training_progress(agent, eval_data, eval_episodes, dirs):
     training_lengths = agent.episode_lengths
     training_losses = agent.training_losses
     
-    fig, axes = plt.subplots(2, 3, figsize=(18, 12))
+    fig, axes = plt.subplots(2, 4, figsize=(18, 12))
     
     # Training rewards
     if training_rewards:
@@ -142,17 +142,25 @@ def plot_training_progress(agent, eval_data, eval_episodes, dirs):
         axes[0, 1].set_xlabel('Episode')
         axes[0, 1].set_ylabel('Steps')
         axes[0, 1].grid(True)
+
+    # collission numbers
+    if agent.collisions:
+        axes[0, 2].plot(agent.collisions)
+        axes[0, 2].set_title('Collisions During Training')
+        axes[0, 2].set_xlabel('Episode')
+        axes[0, 2].set_ylabel('Collisions')
+        axes[0, 2].grid(True)
     
     # Evaluation performance
     if eval_data:
         eval_means = [data['mean_reward'] for data in eval_data]
         eval_stds = [data['std_reward'] for data in eval_data]
         
-        axes[0, 2].errorbar(eval_episodes, eval_means, yerr=eval_stds, marker='o')
-        axes[0, 2].set_title('Evaluation Performance')
-        axes[0, 2].set_xlabel('Episode')
-        axes[0, 2].set_ylabel('Average Reward')
-        axes[0, 2].grid(True)
+        axes[0, 3].errorbar(eval_episodes, eval_means, yerr=eval_stds, marker='o')
+        axes[0, 3].set_title('Evaluation Performance')
+        axes[0, 3].set_xlabel('Episode')
+        axes[0, 3].set_ylabel('Average Reward')
+        axes[0, 3].grid(True)
     
     # Training losses
     if training_losses['actor_loss']:
@@ -172,7 +180,7 @@ def plot_training_progress(agent, eval_data, eval_episodes, dirs):
         axes[1, 1].set_xlabel('Update Step')
         axes[1, 1].set_ylabel('Alpha Value')
         axes[1, 1].grid(True)
-    
+
     # Success rate over time
     if eval_data:
         success_rates = [data['success_rate'] for data in eval_data]
@@ -193,6 +201,7 @@ def save_training_log(agent, eval_data, eval_episodes, dirs):
         'training_rewards': agent.episode_rewards,
         'training_lengths': agent.episode_lengths,
         'training_losses': agent.training_losses,
+        'collisions': agent.collisions,
         'evaluation_data': eval_data,
         'evaluation_episodes': eval_episodes
     }
@@ -308,7 +317,7 @@ def main():
         
         # Evaluation
         if (episode + 1) % args.eval_freq == 0:
-            print(f"\n📈 Evaluating at episode {episode + 1}...")
+            print(f"\nEvaluating at episode {episode + 1}...")
             eval_results = run_evaluation(agent, eval_env, args.eval_episodes, args.max_steps, render=args.render_eval)
             eval_data.append(eval_results)
             eval_episodes.append(episode + 1)
