@@ -123,6 +123,7 @@ class SACAgent:
         # Performance tracking
         self.episode_rewards = []
         self.episode_lengths = []
+        self.collisions = []
     
     def state_to_vector(self, obs):
         """
@@ -457,7 +458,8 @@ class SACAgent:
             'log_alpha': self.log_alpha if self.auto_temp else None,
             'training_losses': self.training_losses,
             'episode_rewards': self.episode_rewards,
-            'episode_lengths': self.episode_lengths
+            'episode_lengths': self.episode_lengths,
+            'collisions': self.collisions
         }, filepath)
         print(f"SAC model saved to: {filepath}")
     
@@ -480,6 +482,8 @@ class SACAgent:
             self.episode_rewards = checkpoint['episode_rewards']
         if 'episode_lengths' in checkpoint:
             self.episode_lengths = checkpoint['episode_lengths']
+        if 'collissions' in checkpoint:
+            self.episode_lengths = checkpoint['collisions']
         
         print(f"SAC model loaded from: {filepath}")
 

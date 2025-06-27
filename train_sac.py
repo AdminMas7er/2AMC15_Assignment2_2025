@@ -215,9 +215,9 @@ def main():
     dirs = setup_directories(args.output_dir)
     save_config(args, dirs)
     
-    print(f"🚀 Training SAC agent - Qi's implementation")
-    print(f"📁 Results will be saved to: {dirs['run']}")
-    print(f"🎯 Target: Outperform Stefan's DQN baseline")
+    print(f"Training SAC agent")
+    print(f"Results will be saved to: {dirs['run']}")
+    print(f"Target: Outperform Stefan's DQN baseline")
     
     # Initialize environment
     env = ContinuousEnvironment(space_file=args.restaurant, enable_gui=not args.no_gui)
@@ -230,7 +230,7 @@ def main():
     
     # Initialize SAC agent
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"🔧 Using device: {device}")
+    print(f"Using device: {device}")
     
     agent = SACAgent(
         state_size=state_size,
@@ -247,7 +247,7 @@ def main():
     )
     
     # Warmup phase: collect initial experiences with random actions
-    print(f"🔥 Warmup phase: collecting {args.batch_size * 2} initial experiences...")
+    print(f"Warmup phase: collecting {args.batch_size * 2} initial experiences...")
     warmup_steps = args.batch_size * 2
     warmup_obs = env.reset()
     for _ in range(warmup_steps):
@@ -255,26 +255,27 @@ def main():
         next_obs, reward, done, info = env.step(warmup_action)
         agent.remember(warmup_obs, warmup_action, reward, next_obs, done)
         warmup_obs = next_obs if not done else env.reset()
-    print(f"✅ Warmup completed! Buffer size: {len(agent.memory)}")
+    print(f"Warmup completed! Buffer size: {len(agent.memory)}")
     
     # Load pre-trained model if specified
     if args.load_model:
         agent.load_model(args.load_model)
-        print(f"📥 Loaded pre-trained model from: {args.load_model}")
+        print(f"Loaded pre-trained model from: {args.load_model}")
     
     # Training metrics
     eval_data = []
     eval_episodes = []
     best_eval_reward = float('-inf')
     
-    print(f"🏃‍♂️ Starting SAC training for {args.episodes} episodes...")
-    print(f"📊 Evaluation every {args.eval_freq} episodes")
+    print(f"Starting SAC training for {args.episodes} episodes...")
+    print(f"Evaluation every {args.eval_freq} episodes")
     
     # Training loop
     for episode in trange(args.episodes, desc="Training SAC"):
         observation = env.reset()
         episode_reward = 0
         episode_length = 0
+        collisions = 0  # Track collisions
         
         for step in range(args.max_steps):
             # Select action
@@ -282,7 +283,8 @@ def main():
             
             # Environment step
             next_observation, reward, done, info = env.step(int(action))
-            
+            if info.get("collision"):
+                    collisions += 1
             # Store experience and update agent
             agent.remember(observation, action, reward, next_observation, done)
             
@@ -302,6 +304,7 @@ def main():
         # Record episode metrics
         agent.episode_rewards.append(episode_reward)
         agent.episode_lengths.append(episode_length)
+        agent.collisions.append(collisions)
         
         # Evaluation
         if (episode + 1) % args.eval_freq == 0:
@@ -311,10 +314,10 @@ def main():
             eval_episodes.append(episode + 1)
             
             # Print evaluation results
-            print(f"📊 Evaluation Results (Episode {episode + 1}):")
-            print(f"   Mean Reward: {eval_results['mean_reward']:.2f} ± {eval_results['std_reward']:.2f}")
-            print(f"   Mean Length: {eval_results['mean_length']:.1f}")
-            print(f"   Success Rate: {eval_results['success_rate']:.2%}")
+            print(f"Evaluation Results (Episode {episode + 1}):")
+            print(f"Mean Reward: {eval_results['mean_reward']:.2f} ± {eval_results['std_reward']:.2f}")
+            print(f"Mean Length: {eval_results['mean_length']:.1f}")
+            print(f"Success Rate: {eval_results['success_rate']:.2%}")
             
             # Print SAC-specific metrics
             if agent.training_losses['alpha_value']:
@@ -330,31 +333,31 @@ def main():
                 best_eval_reward = eval_results['mean_reward']
                 best_model_path = dirs['models'] / 'best_model.pth'
                 agent.save_model(str(best_model_path))
-                print(f"💾 New best model saved! Reward: {best_eval_reward:.2f}")
+                print(f"New best model saved! Reward: {best_eval_reward:.2f}")
         
         # Save model periodically
         if (episode + 1) % args.save_freq == 0:
             model_path = dirs['models'] / f'model_episode_{episode + 1}.pth'
             agent.save_model(str(model_path))
-            print(f"💾 Model saved: {model_path}")
+            print(f"Model saved: {model_path}")
         
         # Update progress plots periodically
         if (episode + 1) % (args.eval_freq * 2) == 0:
             plot_training_progress(agent, eval_data, eval_episodes, dirs)
     
     # Final evaluation
-    print("\n🎯 Running final evaluation...")
+    print("\nRunning final evaluation...")
     final_eval = run_evaluation(agent, eval_env, args.eval_episodes * 3, args.max_steps, render=args.render_eval)
     
-    print(f"\n🏆 Final SAC Evaluation Results:")
-    print(f"   Mean Reward: {final_eval['mean_reward']:.2f} ± {final_eval['std_reward']:.2f}")
-    print(f"   Mean Length: {final_eval['mean_length']:.1f}")
-    print(f"   Success Rate: {final_eval['success_rate']:.2%}")
+    print(f"\nFinal SAC Evaluation Results:")
+    print(f"Mean Reward: {final_eval['mean_reward']:.2f} ± {final_eval['std_reward']:.2f}")
+    print(f"Mean Length: {final_eval['mean_length']:.1f}")
+    print(f"Success Rate: {final_eval['success_rate']:.2%}")
     
     # Save final model
     final_model_path = dirs['models'] / 'final_model.pth'
     agent.save_model(str(final_model_path))
-    print(f"💾 Final model saved: {final_model_path}")
+    print(f"Final model saved: {final_model_path}")
     
     # Create final plots and save logs
     plot_training_progress(agent, eval_data, eval_episodes, dirs)
@@ -383,9 +386,9 @@ def main():
     with open(dirs['logs'] / 'final_results.json', 'w') as f:
         json.dump(final_results, f, indent=2)
     
-    print(f"\n✅ SAC training completed!")
-    print(f"📁 All results saved to: {dirs['run']}")
-    print(f"🎯 Ready for comparison with Stefan's DQN baseline!")
+    print(f"\nSAC training completed!")
+    print(f"All results saved to: {dirs['run']}")
+    print(f"Ready for comparison with Stefan's DQN baseline!")
     
     # Cleanup - enviroment_final doesn't have close method
     # env.close()
