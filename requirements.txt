@@ -8,3 +8,4 @@ colorcet >=3.0
 torch >=2.7
 torchvision >=0.16
 torchaudio >=2.7
+matplotlib >=3.7

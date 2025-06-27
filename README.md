@@ -1,183 +1,202 @@
-# Welcome to Data Intelligence Challenge-2AMC15 Assignment 2!
+# Data Intelligence Challenge – 2AMC15 Assignment 2
 
-This is the repository containing the challenge environment code for both grid-world and continuous-space navigation scenarios.
-
----
-
-## Quickstart
-
-1. Create a virtual environment with Python ≥ 3.10 (we recommend 3.11):
-   `conda create -n dic2025_2 python=3.11`
-   Then activate it:
-   `conda activate dic2025_2`
-2. Clone the repository (or download it):
-   `git clone https://github.com/AdminMas7er/2AMC15_Assignment2_2025.git`
-3. Install dependencies:
-   `pip install -r requirements.txt`
-4. Run the grid-world training script:
-   `python train.py --agent random_agent --restaurant grid_configs/my_first_restaurant.npz`
+This repository (https://github.com/AdminMas7er/2AMC15_Assignment2_2025) contains the environment and training code for autonomous food delivery agents in a continuous-space restaurant settings. It supports two RL agents, Deep Q-Learning (DQN) and Soft Actor-Critic (SAC), and provides tools for restaurant creation, training, and evaluation.
 
 ---
 
-## Training in Continuous Environments
+## Quickstart Guide
 
-You can also now train agents in continuous 2D restaurant environments using the new continuous space simulation:
+### 1. Set up environment
+We recommend a conda Python ≥ 3.10 installation (tested with 3.11), run the following with a terminal (dependent on OS) opened in the directory containing this file:
 
-1. First, create a restaurant space interactively:
-   `python world/restaurant_creator_localhost.py`
-   Then go to [127.0.0.1:5000](http://127.0.0.1:5000) or http://localhost:5000 to place tables and export your layout as `.npz`.
+```bash
+conda create -n dic2025_2 python=3.11
+conda activate dic2025_2
+pip install -r requirements.txt
+````
 
-2. Run training or testing on the saved `.npz` space:
+### 2. Run a baseline (grid world)
 
-   ```bash
-   python train.py --agent random_agent --restaurant grid_configs/my_first_restaurant.npz --iter 500
-   ```
+```bash
+python train.py --agent random_agent --restaurant grid_configs/my_first_restaurant.npz
+```
 
-### train_dqn.py usage for continuous space:
+---
+
+## Continuous Environment Setup
+
+### 1. Create a restaurant layout
+
+To start the interactive table placement tool:
+
+```bash
+python world/restaurant_creator_localhost.py
+```
+
+Then open [http://localhost:5000](http://localhost:5000) in your browser to create a custom restaurant with tables and a kitchen and export your layout as `.npz`.
+
+Absolutely! Below is a **more expansive and structured** version of the README starting from **“2. Train a DQN agent”**. It now includes all options, better guidance, and clear links between code files and functionality.
+
+You can paste this directly into your `README.md`.
+
+---
+
+### 2. Train a DQN agent
+
+To train a Deep Q-Learning (DQN) agent in a continuous-space restaurant environment, use the following script:
+
+```bash
+python train_dqn.py --restaurant grid_configs/my_first_restaurant.npz
+````
+
+This script trains the agent using a minimal observation space and 5 discrete actions. Results and models will be saved in a timestamped folder under `results/`.
+
+#### Full options for `train_dqn.py`
 
 ```bash
 usage: train_dqn.py --restaurant RESTAURANT [--episodes EPISODES]
                     [--no_gui] [--seed SEED]
                     [--load_model PATH] [--demo]
-
-Train agent in a continuous restaurant space.
-
-options:
-  --restaurant RESTAURANT Path to the .npz restaurant layout
-  --episodes EPISODES             Number of training episodes (default: 100)
-  --no_gui                Disables GUI rendering
-  --seed SEED             Random seed (default: 42)
-  --load_model PATH         Path to a saved model to resume training or run demo
-  --demo                    Run in demo mode (no exploration)
 ```
 
-### train.py usage for continuous space:
+* `--restaurant`: Path to the `.npz` file generated via the restaurant creator GUI.
+* `--episodes`: Number of training episodes (default: 100).
+* `--no_gui`: Disable the visual GUI window during training (useful for faster headless training).
+* `--seed`: Set the random seed for reproducibility.
+* `--load_model`: Load a previously trained model (used to resume training or run in demo mode).
+* `--demo`: Run the loaded model in inference mode (no learning or exploration).
+
+#### Example usage:
 
 ```bash
-usage: train.py --agent AGENT --restaurant RESTAURANT [--iter ITER]
-                [--no_gui] [--seed SEED]
+# Train a new DQN agent without GUI
+python train_dqn.py --restaurant restaurants/example_layout.npz --episodes 500 --no_gui
 
-Train agent in a continuous restaurant space.
+# Resume training from checkpoint
+python train_dqn.py --restaurant restaurants/example_layout.npz --load_model results/dqn_training_TIMESTAMP/models/best_model.pth
 
-options:
-  --agent AGENT           Name of the agent module (e.g., random_agent)
-  --restaurant RESTAURANT Path to the .npz restaurant layout
-  --iter ITER             Number of iterations (default: 1000)
-  --no_gui                Disables GUI rendering
-  --seed SEED             Random seed (default: 42)
+# Run trained model in demo mode
+python train_dqn.py --restaurant restaurants/example_layout.npz --load_model results/.../best_model.pth --demo
 ```
 
 ---
 
-## SAC (Soft Actor-Critic) Agent Training
+### 3. Train a SAC agent
 
-### Quick Start
+To train a Soft Actor-Critic (SAC) agent in the same environment:
 
 ```bash
-# Basic training
-python train_sac.py --episodes 100 --max_steps 300 --eval_freq 25 --no_gui
-
-# Training with visualization
-python train_sac.py --episodes 100 --max_steps 300 --eval_freq 25
-
-# Test trained model
-python train_sac.py --load_model results/sac_training_TIMESTAMP/models/best_model.pth --episodes 10
+python train_sac.py --restaurant path/to/layout.npz --episodes 200
 ```
 
-### SAC Training Options
+The SAC agent supports entropy-regularized learning and is adapted to a discrete action space. Like `train_dqn.py`, the training process logs performance metrics and saves models under the `results/` directory.
+
+#### Full options for `train_sac.py`
 
 ```bash
 usage: train_sac.py [--restaurant RESTAURANT] [--episodes EPISODES] 
                     [--max_steps MAX_STEPS] [--eval_freq EVAL_FREQ]
-                    [--no_gui] [--output_dir OUTPUT_DIR] [--load_model MODEL]
-                    [--lr LR] [--gamma GAMMA] [--batch_size BATCH_SIZE]
+                    [--eval_episodes EVAL_EPISODES] [--no_gui]
+                    [--render_eval] [--seed SEED]
+                    [--output_dir OUTPUT_DIR] [--load_model MODEL]
 
-Train SAC agent in continuous restaurant environment
-
-options:
-  --restaurant RESTAURANT     Path to restaurant layout (default: grid_configs/my_first_restaurant.npz)
-  --episodes EPISODES         Number of training episodes (default: 2000)
-  --max_steps MAX_STEPS       Maximum steps per episode (default: 500)
-  --eval_freq EVAL_FREQ       Evaluation frequency in episodes (default: 100)
-  --eval_episodes EVAL_EPISODES  Episodes for evaluation (default: 10)
-  --no_gui                    Disable GUI during training
-  --render_eval               Enable rendering during evaluation
-  --seed SEED                 Random seed for reproducibility (default: 42)
-  --output_dir OUTPUT_DIR     Output directory for results (default: results)
-  --load_model MODEL          Path to pre-trained model to continue training
-  
 SAC Hyperparameters:
-  --lr LR                     Learning rate (default: 1e-3)
-  --gamma GAMMA               Discount factor (default: 0.98)
-  --tau TAU                   Soft update coefficient (default: 0.01)
-  --buffer_size BUFFER_SIZE   Replay buffer size (default: 50000)
-  --batch_size BATCH_SIZE     Training batch size (default: 128)
-  --hidden_size HIDDEN_SIZE   Neural network hidden layer size (default: 512)
+  --lr LR
+  --gamma GAMMA
+  --tau TAU
+  --buffer_size BUFFER_SIZE
+  --batch_size BATCH_SIZE
+  --hidden_size HIDDEN_SIZE
 ```
 
-### Results
+* `--restaurant`: Path to the `.npz` layout file (default: grid\_configs/my\_first\_restaurant.npz)
+* `--episodes`: Total training episodes (default: 2000)
+* `--max_steps`: Maximum steps per episode (default: 500)
+* `--eval_freq`: Evaluation frequency (default: every 100 episodes)
+* `--eval_episodes`: How many episodes to run during each evaluation phase
+* `--no_gui`: Disable GUI during training
+* `--render_eval`: Enable rendering during evaluation only
+* `--seed`: Set random seed for reproducibility
+* `--output_dir`: Output folder for results (default: `results/`)
+* `--load_model`: Path to a saved model to resume training or run demo
 
-Training results are saved in `results/sac_training_TIMESTAMP/` with models, plots, and logs. Key metrics include success rate, mean reward, and episode length.
+#### SAC hyperparameter overrides
 
+* `--lr`: Learning rate (default: 1e-3)
+* `--gamma`: Discount factor (default: 0.98)
+* `--tau`: Target network soft update coefficient (default: 0.01)
+* `--buffer_size`: Replay buffer size (default: 50,000)
+* `--batch_size`: Batch size for training (default: 128)
+* `--hidden_size`: Hidden layer size for actor/critic networks (default: 512)
 
+#### Example usage:
+
+```bash
+# Train a SAC agent with default settings
+python train_sac.py --restaurant grid_configs/my_first_restaurant.npz --episodes 1000
+
+# Train with rendering disabled for speed
+python train_sac.py --restaurant grid_configs/my_first_restaurant.npz --episodes 1000 --no_gui
+
+# Test a trained SAC model
+python train_sac.py --load_model results/sac_training_TIMESTAMP/models/best_model.pth --episodes 10 --demo
+```
 
 ---
+<!-- 
+## Results and Logging
 
-## Code Guide
+Both training scripts will automatically create output folders under:
 
-### The `agent` module
-
-Contains all RL agents. Each agent must implement at least:
-
-* `take_action(observation)`
-* `update()` (optional for non-learning agents)
-
-See `random_agent.py` for a minimal example in continuous environments.
-
-### The `world` module
-
-Includes all simulation logic, visualization, and file I/O for both grid and continuous modes.
-
-#### `grid_creator.py`
-
-Run this file to design grid-worlds in your browser:
-
-```bash
-python grid_creator.py
+```
+results/sac_training_TIMESTAMP/
+results/dqn_training_TIMESTAMP/
 ```
 
-Go to [127.0.0.1:5000](http://127.0.0.1:5000) and design maps using interactive tools. Saved files appear in `grid_configs/`.
+These folders contain:
 
-#### `continuous_space_creator_web.py`
+* `models/`: Saved model checkpoints
+* `log.csv`: Per-episode training logs (reward, success, steps, etc.)
+* `plots/`: Auto-generated performance plots (reward, success rate, episode length)
+* `config.json`: Metadata and hyperparameters used for the run
 
-Run this to design restaurant environments in continuous 2D space:
+--- -->
 
-```bash
-python continuous_space_creator_web.py
-```
+## How the Code Works (File Guide)
 
-Then visit [127.0.0.1:5000](http://127.0.0.1:5000) to create your layout.
+This section gives a minimal overview of how to work with the codebase.
 
-#### `environment.py`
+### Environments
 
-Contains two main environments:
+* `world/environment_stefan.py`
+  Core environment class (`ContinuousEnvironment`) for continuous-space delivery tasks. Handles robot movement, collision detection, table layouts, and rendering.
 
-* `Environment`: for discrete grid-worlds
-* `ContinuousEnvironment`: for continuous delivery tasks with sensors and physics
+* `world/continuous_space.py`
+  Defines the restaurant's physical space (width, height, table positions, etc.). Used to create `.npz` layout files.
 
-Both provide:
+* `world/restaurant_creator_localhost.py`
+  Launches a local web app to visually place tables. Exported layouts can be used for training.
 
-* `reset()` to start a new episode
-* `step(action)` to take an action and get the next state
-* `evaluate_agent()` to test trained policies
+### Agents
 
-#### `grid.py` and `continuous_space.py`
+* `agents/sac_agent.py`
+  Discrete-action SAC agent with automatic entropy tuning. Includes actor/critic networks, replay buffer, and training logic.
 
-These represent the world in memory:
+* `agents/dqn_final.py`
+  DQN agent implementation using target networks and \$\epsilon\$-greedy exploration.
 
-* `Grid`: discrete 2D arrays
-* `ContinuousSpace`: width, height, table radius, and table locations
+* `agents/random_agent.py`
+  Baseline agent that takes random actions.
 
-<!-- #### `gui.py`
+### Training Scripts
 
-Handles visualizations via PyGame. Works for both environments. GUI can be turned off with `--no_gui` during training for speed. -->
+* `train_sac.py`
+  Trains a SAC agent in a specified continuous environment.
+
+* `train_dqn.py`
+  Trains a DQN agent using the same environment and interfaces.
+
+* `train.py`
+  Original training script for simple agents (not used for RL training).
+
+---
