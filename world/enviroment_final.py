@@ -83,7 +83,8 @@ class ContinuousEnvironment:
             pygame.init()
             self.window = pygame.display.set_mode(WINDOW_SIZE)
             pygame.display.set_caption("Continuous Environment")
-            self.screen_scale = 80        # pixels per metre
+            self.screen_scale = min(WINDOW_SIZE[0] / self.width,
+                            WINDOW_SIZE[1] / self.height)
 
         self.reset()
 
@@ -185,14 +186,71 @@ class ContinuousEnvironment:
             # "has_order":      self.has_order          
         }
 
-    # ------------------------------------------------------------------
-    # GUI rendering left unchanged – omitted here for brevity
-    # ------------------------------------------------------------------
+    # GUI------------------------------------------------------------------
+    def _render(self, obs):
+        font = pygame.font.SysFont("Arial", 16)
+        self.window.fill(BACKGROUND_COLOR)
 
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit(); exit()
+
+        def to_px(p):
+            return (int(p[0] * self.screen_scale),
+                    int(self.height * self.screen_scale - p[1] * self.screen_scale))
+
+        # tables
+        for idx, tbl in enumerate(self.tables):
+            color = (255, 0, 0) if idx == obs["current_target"] else TABLE_COLOR
+            pygame.draw.circle(self.window, color, to_px(tbl),
+                               int(self.table_radius * self.screen_scale))
+            lbl = font.render(str(idx + 1), True, (255, 255, 255))
+            self.window.blit(lbl, lbl.get_rect(center=to_px(tbl)))
+        
+        #pickup (kitchen)
+        pickup_px = to_px(self.pickup_point)
+        rect_width = 80
+        rect_height = 40
+        pickup_rect = pygame.Rect(
+            pickup_px[0] - rect_width // 2,
+            pickup_px[1] - rect_height // 2,
+            rect_width,
+            rect_height
+        )
+        pygame.draw.rect(self.window, (0, 200, 0), pickup_rect)
+        font = pygame.font.SysFont("Arial", 16)
+        label = font.render("KITCHEN", True, (255, 255, 255))  # White text
+        label_rect = label.get_rect(center=pickup_rect.center)
+        self.window.blit(label, label_rect)
+        
+
+        # agent
+        pygame.draw.circle(self.window, AGENT_COLOR, to_px(obs["agent_pos"]), 10)
+
+        # HUD
+        panel_w = 200
+        pygame.draw.rect(self.window, (240, 240, 240),
+                         pygame.Rect(WINDOW_SIZE[0]-panel_w, 0, panel_w, 100))
+        elapsed = time.time() - self.episode_start_time
+        def text(t, y): self.window.blit(font.render(t, True, (0,0,0)),
+                                         (WINDOW_SIZE[0]-panel_w+10, y))
+        text(f"Time: {elapsed:4.1f}s", 10)
+        text(f"Steps:{self.steps_taken:4d}", 30)
+        text(f"Reward:{self.cumulative_reward:6.1f}", 50)
+        text(f"Target:{obs['current_target']+1}", 70)
+
+        pygame.display.flip()
+        pygame.time.delay(50)
+
+    #  close
+    def close(self):
+        if getattr(self, "enable_gui", False):
+            pygame.quit()
+
+    #  properties
     @property
     def state_size(self):
-        """Length of the flattened observation vector used by the agent."""
-        return 2 + 2 + len(self.tables)  
+        return 2 + 2 + len(self.tables)
 
     @property
     def action_size(self):
