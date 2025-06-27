@@ -1,6 +1,5 @@
 """
 SAC (Soft Actor-Critic) Agent Implementation for Restaurant Delivery
-Qi's implementation for 2AMC15 Assignment 2 - designed to outperform Stefan's DQN baseline
 """
 
 import torch
@@ -17,55 +16,79 @@ from pathlib import Path
 Experience = namedtuple('Experience', ['state', 'action', 'reward', 'next_state', 'done'])
 
 class Actor(nn.Module):
-    """Enhanced Policy network (Actor) with stable architecture"""
-    def __init__(self, state_size, action_size, hidden_size=256):
+    """Policy network (Actor)"""
+    def __init__(self, state_size, action_size, hidden_size=512):
         super(Actor, self).__init__()
         self.fc1 = nn.Linear(state_size, hidden_size)
         self.fc2 = nn.Linear(hidden_size, hidden_size)
-        self.fc3 = nn.Linear(hidden_size, hidden_size)  # Additional layer
-        self.fc4 = nn.Linear(hidden_size, action_size)
+        self.fc3 = nn.Linear(hidden_size, hidden_size//2)
+        self.fc4 = nn.Linear(hidden_size//2, hidden_size//4)
+        self.fc5 = nn.Linear(hidden_size//4, action_size)
+        self.dropout = nn.Dropout(0.1)
         
     def forward(self, state):
         x = F.relu(self.fc1(state))
+        x = self.dropout(x)
         x = F.relu(self.fc2(x))
         x = F.relu(self.fc3(x))
-        logits = self.fc4(x)
+        x = F.relu(self.fc4(x))
+        logits = self.fc5(x)
         return F.softmax(logits, dim=-1)
 
 class Critic(nn.Module):
-    """Enhanced Q-network (Critic) with stable architecture"""
-    def __init__(self, state_size, action_size, hidden_size=256):
+    """Q-network (Critic)"""
+    def __init__(self, state_size, action_size, hidden_size=512):
         super(Critic, self).__init__()
         self.fc1 = nn.Linear(state_size, hidden_size)
         self.fc2 = nn.Linear(hidden_size, hidden_size)
-        self.fc3 = nn.Linear(hidden_size, hidden_size)  # Additional layer
-        self.fc4 = nn.Linear(hidden_size, action_size)
+        self.fc3 = nn.Linear(hidden_size, hidden_size//2)
+        self.fc4 = nn.Linear(hidden_size//2, hidden_size//4)
+        self.fc5 = nn.Linear(hidden_size//4, action_size)
+        self.dropout = nn.Dropout(0.1)
         
     def forward(self, state):
         x = F.relu(self.fc1(state))
+        x = self.dropout(x)
         x = F.relu(self.fc2(x))
         x = F.relu(self.fc3(x))
-        return self.fc4(x)
+        x = F.relu(self.fc4(x))
+        return self.fc5(x)
 
 class ReplayBuffer:
-    """Experience replay buffer for SAC"""
+    """Experience replay buffer with success prioritization"""
     def __init__(self, capacity):
         self.buffer = deque(maxlen=capacity)
+        self.success_buffer = deque(maxlen=capacity//4)
     
     def push(self, state, action, reward, next_state, done):
-        self.buffer.append(Experience(state, action, reward, next_state, done))
+        experience = Experience(state, action, reward, next_state, done)
+        self.buffer.append(experience)
+        
+        if done and reward > 40:
+            self.success_buffer.append(experience)
     
     def sample(self, batch_size):
-        return random.sample(self.buffer, batch_size)
+        if len(self.success_buffer) > 0 and len(self.buffer) > batch_size:
+            success_ratio = min(0.3, len(self.success_buffer) / len(self.buffer))
+            num_success = int(batch_size * success_ratio)
+            num_regular = batch_size - num_success
+            
+            if num_success > 0 and len(self.success_buffer) >= num_success:
+                success_samples = random.sample(list(self.success_buffer), num_success)
+            else:
+                success_samples = []
+                num_regular = batch_size
+                
+            regular_samples = random.sample(list(self.buffer), num_regular)
+            return success_samples + regular_samples
+        else:
+            return random.sample(list(self.buffer), batch_size)
     
     def __len__(self):
         return len(self.buffer)
 
 class SACAgent:
-    """
-    SAC Agent for discrete action spaces - Qi's implementation
-    Designed to outperform DQN baseline with better sample efficiency and stability
-    """
+    """SAC Agent for discrete action spaces"""
     
     def __init__(self, state_size, action_size, lr=3e-4, gamma=0.99, tau=0.005, 
                  alpha=0.2, buffer_size=100000, batch_size=256, hidden_size=256,
@@ -81,9 +104,7 @@ class SACAgent:
         self.auto_temp = auto_temp
         self.update_count = 0
         
-        # Device configuration
         self.device = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        print(f"SAC Agent using device: {self.device}")
         
         # Networks
         self.actor = Actor(state_size, action_size, hidden_size).to(self.device)
@@ -92,7 +113,6 @@ class SACAgent:
         self.target_critic1 = Critic(state_size, action_size, hidden_size).to(self.device)
         self.target_critic2 = Critic(state_size, action_size, hidden_size).to(self.device)
         
-        # Initialize target networks
         self.target_critic1.load_state_dict(self.critic1.state_dict())
         self.target_critic2.load_state_dict(self.critic2.state_dict())
         
@@ -101,14 +121,17 @@ class SACAgent:
         self.critic1_optimizer = optim.Adam(self.critic1.parameters(), lr=lr)
         self.critic2_optimizer = optim.Adam(self.critic2.parameters(), lr=lr)
         
-        # Automatic temperature tuning with controlled initialization
-        if self.auto_temp:
-            self.target_entropy = -np.log(1.0 / action_size) * 0.8  # Balanced target
-            # Initialize with moderate temperature
-            self.log_alpha = torch.tensor([np.log(0.1)], requires_grad=True, device=self.device, dtype=torch.float32)
-            self.alpha_optimizer = optim.Adam([self.log_alpha], lr=lr * 0.1)  # Much slower alpha learning
+        self.actor_scheduler = optim.lr_scheduler.ExponentialLR(self.actor_optimizer, gamma=0.999)
+        self.critic1_scheduler = optim.lr_scheduler.ExponentialLR(self.critic1_optimizer, gamma=0.999)
+        self.critic2_scheduler = optim.lr_scheduler.ExponentialLR(self.critic2_optimizer, gamma=0.999)
         
-        # Experience replay buffer
+        # Temperature tuning
+        if self.auto_temp:
+            self.target_entropy = -np.log(1.0 / action_size) * 0.6
+            self.log_alpha = torch.tensor([np.log(0.05)], requires_grad=True, device=self.device, dtype=torch.float32)
+            self.alpha_optimizer = optim.Adam([self.log_alpha], lr=lr * 0.02)
+            self.alpha_min = 0.005
+        
         self.memory = ReplayBuffer(buffer_size)
         
         # Training metrics
@@ -120,85 +143,73 @@ class SACAgent:
             'alpha_value': []
         }
         
-        # Performance tracking
         self.episode_rewards = []
         self.episode_lengths = []
     
     def state_to_vector(self, obs):
-        """
-        Advanced state representation with target-directed navigation
-        """
+        """Convert observation to state vector"""
         if isinstance(obs, dict):
-            # Agent position (normalized to [0,1])
-            agent_pos = np.array(obs["agent_pos"]) / 10.0  # [x, y] normalized
+            agent_pos = np.array(obs["agent_pos"]) / 10.0
+            heading = np.array(obs["heading"])
             
-            # Agent heading (cosθ, sinθ) 
-            heading = np.array(obs["heading"])  # [cos, sin]
-            
-            # Current target as one-hot encoding (assume max 5 tables)
             target_id = int(obs["current_target"])
-            target_onehot = np.zeros(5)  # Max 5 tables
+            target_onehot = np.zeros(5)
             if 0 <= target_id < 5:
                 target_onehot[target_id] = 1.0
             
-            # Enhanced features for better navigation
             pos_real = np.array(obs["agent_pos"])
             
-            # Distance to boundaries (normalized)
             dist_to_boundaries = np.array([
-                pos_real[0] / 10.0,          # distance to left boundary
-                (10.0 - pos_real[0]) / 10.0, # distance to right boundary  
-                pos_real[1] / 10.0,          # distance to bottom boundary
-                (10.0 - pos_real[1]) / 10.0  # distance to top boundary
+                pos_real[0] / 10.0,
+                (10.0 - pos_real[0]) / 10.0,
+                pos_real[1] / 10.0,
+                (10.0 - pos_real[1]) / 10.0
             ])
             
-            # Target direction estimation (crucial for navigation!)
-            # Use fixed table positions based on standard restaurant layout
-            estimated_table_positions = [
-                [2.5, 2.5],  # Table 0: bottom-left
-                [7.5, 2.5],  # Table 1: bottom-right
-                [2.5, 7.5],  # Table 2: top-left
-                [7.5, 7.5],  # Table 3: top-right  
-                [5.0, 5.0],  # Table 4: center
-            ]
+            table_positions = np.array([
+                [2.0, 2.0], [8.0, 2.0], [5.0, 5.0], [2.0, 8.0], [8.0, 8.0]
+            ])
             
-            if target_id < len(estimated_table_positions):
-                target_pos = np.array(estimated_table_positions[target_id])
-                # Direction to target
-                to_target_vec = target_pos - pos_real
-                target_distance = np.linalg.norm(to_target_vec) / 7.07  # normalized
-                to_target_vec = to_target_vec / (np.linalg.norm(to_target_vec) + 1e-8)
-                
-                # Heading alignment with target direction
-                heading_to_target = np.dot(heading, to_target_vec)
-                
-                # Angular difference to target
-                target_angle = np.arctan2(to_target_vec[1], to_target_vec[0])
-                agent_angle = np.arctan2(heading[1], heading[0])
-                angular_diff = np.sin(target_angle - agent_angle)  # sin gives signed shortest angle
+            if 0 <= target_id < 5:
+                target_pos = table_positions[target_id]
+                to_target = target_pos - pos_real
+                target_distance = np.linalg.norm(to_target) / 10.0
+                to_target_norm = to_target / (np.linalg.norm(to_target) + 1e-8)
+                target_alignment = np.dot(heading, to_target_norm)
             else:
                 target_distance = 0.5
-                heading_to_target = 0.0
-                angular_diff = 0.0
+                target_alignment = 0.0
+                to_target_norm = np.array([0.0, 0.0])
             
-            # Wall proximity warnings
+            center_pos = np.array([5.0, 5.0])
+            dist_to_center = np.linalg.norm(pos_real - center_pos) / 7.07
+            
             wall_proximity = np.array([
-                1.0 if pos_real[0] < 1.0 else 0.0,  # near left wall
-                1.0 if pos_real[0] > 9.0 else 0.0,  # near right wall
-                1.0 if pos_real[1] < 1.0 else 0.0,  # near bottom wall
-                1.0 if pos_real[1] > 9.0 else 0.0,  # near top wall
+                1.0 if pos_real[0] < 1.0 else 0.0,
+                1.0 if pos_real[0] > 9.0 else 0.0,
+                1.0 if pos_real[1] < 1.0 else 0.0,
+                1.0 if pos_real[1] > 9.0 else 0.0,
+            ])
+            
+            pos_encoding = np.array([
+                np.sin(pos_real[0] * np.pi / 10.0),
+                np.cos(pos_real[0] * np.pi / 10.0),
+                np.sin(pos_real[1] * np.pi / 10.0),
+                np.cos(pos_real[1] * np.pi / 10.0),
             ])
             
             return np.concatenate([
-                agent_pos,                    # [x, y] - 2D
-                heading,                      # [cos, sin] - 2D  
-                target_onehot,                # [t0, t1, t2, t3, t4] - 5D
-                dist_to_boundaries,           # [left, right, bottom, top] - 4D
-                np.array([target_distance]),  # [target_dist] - 1D
-                np.array([heading_to_target]), # [heading_alignment] - 1D
-                np.array([angular_diff]),      # [angular_difference] - 1D
-                wall_proximity                # [wall_warnings] - 4D
-            ]).astype(np.float32)  # Total: 20D
+                agent_pos,
+                heading,
+                target_onehot,
+                dist_to_boundaries,
+                np.array([target_distance]),
+                np.array([target_alignment]),
+                to_target_norm,
+                np.array([dist_to_center]),
+                wall_proximity,
+                pos_encoding,
+            ]).astype(np.float32)
         else:
             return obs.astype(np.float32)
     
@@ -211,116 +222,77 @@ class SACAgent:
             action_probs = self.actor(state)
             
             if deterministic:
-                # Choose action with highest probability
                 action_idx = torch.argmax(action_probs, dim=-1)
             else:
-                # Sample from action distribution
                 action_dist = torch.distributions.Categorical(action_probs)
                 action_idx = action_dist.sample()
             
-            # Return discrete action index for enviroment_final compatibility
             return action_idx.cpu().item()
     
     def _discrete_to_continuous_action(self, action_idx):
-        """Convert discrete action index to continuous (velocity, rotation) action"""
-        # Define discrete action mappings
+        """Convert discrete action index to continuous action"""
         action_map = {
-            0: (0.0, 0.0),      # Do nothing
-            1: (0.0, -0.5),     # Rotate left
-            2: (0.0, 0.5),      # Rotate right
-            3: (0.5, 0.0),      # Move forward
-            4: (-0.5, 0.0),     # Move backward
+            0: (0.0, 0.0),
+            1: (0.0, -0.5),
+            2: (0.0, 0.5),
+            3: (0.5, 0.0),
+            4: (-0.5, 0.0),
         }
         return action_map.get(action_idx, (0.0, 0.0))
     
     def remember(self, state, action, reward, next_state, done):
-        """Store experience in replay buffer with reward shaping"""
+        """Store experience in replay buffer"""
         state_vec = self.state_to_vector(state)
         next_state_vec = self.state_to_vector(next_state)
         
-        # Convert continuous action back to discrete index for storage
         if isinstance(action, tuple):
             action_idx = self._continuous_to_discrete_action(action)
         else:
             action_idx = action
         
-        # Internal reward shaping for better learning
         shaped_reward = self._shape_reward(state, next_state, reward, done)
-            
         self.memory.push(state_vec, action_idx, shaped_reward, next_state_vec, done)
     
     def _shape_reward(self, state, next_state, original_reward, done):
-        """
-        Advanced reward shaping with target-directed navigation rewards
-        """
+        """Apply reward shaping"""
         shaped_reward = float(original_reward)
         
         if isinstance(state, dict) and isinstance(next_state, dict):
             curr_pos = np.array(state["agent_pos"], dtype=np.float32)
             next_pos = np.array(next_state["agent_pos"], dtype=np.float32)
-            target_id = int(state["current_target"])
             
-            # Target-directed progress reward
-            estimated_table_positions = [
-                [2.5, 2.5],  # Table 0: bottom-left
-                [7.5, 2.5],  # Table 1: bottom-right
-                [2.5, 7.5],  # Table 2: top-left
-                [7.5, 7.5],  # Table 3: top-right  
-                [5.0, 5.0],  # Table 4: center
-            ]
+            center = np.array([5.0, 5.0], dtype=np.float32)
+            curr_dist_to_center = np.linalg.norm(curr_pos - center)
+            next_dist_to_center = np.linalg.norm(next_pos - center)
             
-            if target_id < len(estimated_table_positions):
-                target_pos = np.array(estimated_table_positions[target_id], dtype=np.float32)
-                
-                # Progress towards target
-                curr_dist_to_target = float(np.linalg.norm(curr_pos - target_pos))
-                next_dist_to_target = float(np.linalg.norm(next_pos - target_pos))
-                target_progress = curr_dist_to_target - next_dist_to_target
-                
-                # Strong reward for getting closer to target
-                shaped_reward += target_progress * 2.0
-                
-                # Bonus for being very close to target
-                if next_dist_to_target < 1.0:
-                    shaped_reward += (1.0 - next_dist_to_target) * 0.5
+            progress = float(curr_dist_to_center - next_dist_to_center)
+            shaped_reward += progress * 0.5
             
-            # Movement efficiency
             movement = float(np.linalg.norm(next_pos - curr_pos))
+            if movement < 0.05:
+                shaped_reward -= 0.05
             
-            # Anti-stagnation penalty
-            if movement < 0.05:  # Very small movement
-                shaped_reward -= 0.1
+            if movement > 0.5:
+                shaped_reward += 0.1
             
-            # Directional movement bonus
-            if movement > 0.3:  # Good movement
-                shaped_reward += 0.05
+            if done and original_reward > 40:
+                shaped_reward += 10.0
             
-            # Wall avoidance reward
-            for pos in [next_pos]:
-                if pos[0] < 0.5 or pos[0] > 9.5 or pos[1] < 0.5 or pos[1] > 9.5:
-                    shaped_reward -= 0.2  # Penalty for being near walls
-            
-            # Success amplification (critical for learning)
-            if done and original_reward > 40:  # Success (original +50)
-                shaped_reward += 15.0  # Strong success bonus
-            
-            # Collision handling - less severe but still discouraged
-            if original_reward < -2.5:  # Likely collision
-                shaped_reward = max(shaped_reward, -1.5)  # Cap collision penalty
+            if original_reward < -2.5:
+                shaped_reward = max(shaped_reward, -2.0)
         
         return np.float32(shaped_reward)
     
     def _continuous_to_discrete_action(self, action):
-        """Convert continuous (velocity, rotation) action to discrete index"""
+        """Convert continuous action to discrete index"""
         velocity, rotation = action
         
-        # Find closest matching discrete action
         action_map = {
-            0: (0.0, 0.0),      # Do nothing
-            1: (0.0, -0.5),     # Rotate left
-            2: (0.0, 0.5),      # Rotate right
-            3: (0.5, 0.0),      # Move forward
-            4: (-0.5, 0.0),     # Move backward
+            0: (0.0, 0.0),
+            1: (0.0, -0.5),
+            2: (0.0, 0.5),
+            3: (0.5, 0.0),
+            4: (-0.5, 0.0),
         }
         
         best_idx = 0
@@ -335,13 +307,11 @@ class SACAgent:
         return best_idx
     
     def update_networks(self):
-        """Update all networks (main SAC update step)"""
+        """Update all networks"""
         if len(self.memory) < self.batch_size:
             return {}
         
-
-        
-        # Sample batch from replay buffer
+        # Sample batch
         experiences = self.memory.sample(self.batch_size)
         batch = Experience(*zip(*experiences))
         
@@ -355,7 +325,7 @@ class SACAgent:
         current_q1 = self.critic1(states).gather(1, actions.unsqueeze(-1)).squeeze(-1)
         current_q2 = self.critic2(states).gather(1, actions.unsqueeze(-1)).squeeze(-1)
         
-        # Next state action probabilities and Q-values
+        # Next state values
         with torch.no_grad():
             next_action_probs = self.actor(next_states)
             next_log_probs = torch.log(next_action_probs + 1e-8)
@@ -364,7 +334,6 @@ class SACAgent:
             next_q2 = self.target_critic2(next_states)
             next_q = torch.min(next_q1, next_q2)
             
-            # Compute target Q-value with entropy term
             alpha = self.log_alpha.exp() if self.auto_temp else self.alpha
             next_v = (next_action_probs * (next_q - alpha * next_log_probs)).sum(dim=-1)
             target_q = rewards + self.gamma * next_v * (~dones)
@@ -401,7 +370,7 @@ class SACAgent:
         torch.nn.utils.clip_grad_norm_(self.actor.parameters(), 1.0)
         self.actor_optimizer.step()
         
-        # Temperature parameter update with constraints
+        # Temperature parameter update
         alpha_loss = torch.tensor(0.0)
         if self.auto_temp:
             entropy = -(action_probs * log_probs).sum(dim=-1).mean()
@@ -411,14 +380,20 @@ class SACAgent:
             alpha_loss.backward()
             self.alpha_optimizer.step()
             
-            # Constrain alpha to reasonable range
             with torch.no_grad():
-                self.log_alpha.clamp_(-5.0, 2.0)  # alpha in [exp(-5), exp(2)] = [0.007, 7.4]
+                alpha_min_log = np.log(self.alpha_min)
+                self.log_alpha.clamp_(alpha_min_log, 1.0)
         
         # Soft update target networks
         if self.update_count % self.target_update_freq == 0:
             self.soft_update(self.target_critic1, self.critic1)
             self.soft_update(self.target_critic2, self.critic2)
+        
+        # Update learning rates
+        if self.update_count % 100 == 0:
+            self.actor_scheduler.step()
+            self.critic1_scheduler.step()
+            self.critic2_scheduler.step()
         
         self.update_count += 1
         
@@ -459,7 +434,6 @@ class SACAgent:
             'episode_rewards': self.episode_rewards,
             'episode_lengths': self.episode_lengths
         }, filepath)
-        print(f"SAC model saved to: {filepath}")
     
     def load_model(self, filepath):
         """Load pre-trained models"""
@@ -480,17 +454,14 @@ class SACAgent:
             self.episode_rewards = checkpoint['episode_rewards']
         if 'episode_lengths' in checkpoint:
             self.episode_lengths = checkpoint['episode_lengths']
-        
-        print(f"SAC model loaded from: {filepath}")
 
 class Agent:
     """Wrapper class for easy integration with training scripts"""
     def __init__(self):
-        # Will be initialized with proper parameters in training script
         self.sac_agent = None
     
     def take_action(self, observation):
         if self.sac_agent:
             return self.sac_agent.act(observation)
         else:
-            return random.randint(0, 4)  # Random action if not initialized 
+            return random.randint(0, 4) 
