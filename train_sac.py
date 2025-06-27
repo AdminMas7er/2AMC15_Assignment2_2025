@@ -40,6 +40,7 @@ def parse_args():
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
     parser.add_argument("--output_dir", type=str, default="results", help="Output directory for results")
     parser.add_argument("--load_model", type=str, help="Path to pre-trained model to load")
+    parser.add_argument("--table_radius", type=float, default=0.5, help="Table radius in the environment")
     
     # SAC specific hyperparameters
     parser.add_argument("--lr", type=float, default=1e-3, help="Learning rate")
@@ -120,7 +121,7 @@ def plot_training_progress(agent, eval_data, eval_episodes, dirs):
     training_lengths = agent.episode_lengths
     training_losses = agent.training_losses
     
-    fig, axes = plt.subplots(2, 3, figsize=(18, 12))
+    fig, axes = plt.subplots(2, 4, figsize=(18, 12))
     
     if training_rewards:
         axes[0, 0].plot(training_rewards)
@@ -135,16 +136,24 @@ def plot_training_progress(agent, eval_data, eval_episodes, dirs):
         axes[0, 1].set_xlabel('Episode')
         axes[0, 1].set_ylabel('Steps')
         axes[0, 1].grid(True)
+
+    # collission numbers
+    if agent.collisions:
+        axes[0, 2].plot(agent.collisions)
+        axes[0, 2].set_title('Collisions During Training')
+        axes[0, 2].set_xlabel('Episode')
+        axes[0, 2].set_ylabel('Collisions')
+        axes[0, 2].grid(True)
     
     if eval_data:
         eval_means = [data['mean_reward'] for data in eval_data]
         eval_stds = [data['std_reward'] for data in eval_data]
         
-        axes[0, 2].errorbar(eval_episodes, eval_means, yerr=eval_stds, marker='o')
-        axes[0, 2].set_title('Evaluation Performance')
-        axes[0, 2].set_xlabel('Episode')
-        axes[0, 2].set_ylabel('Average Reward')
-        axes[0, 2].grid(True)
+        axes[0, 3].errorbar(eval_episodes, eval_means, yerr=eval_stds, marker='o')
+        axes[0, 3].set_title('Evaluation Performance')
+        axes[0, 3].set_xlabel('Episode')
+        axes[0, 3].set_ylabel('Average Reward')
+        axes[0, 3].grid(True)
     
     if training_losses['actor_loss']:
         axes[1, 0].plot(training_losses['actor_loss'], label='Actor Loss', alpha=0.7)
@@ -162,7 +171,8 @@ def plot_training_progress(agent, eval_data, eval_episodes, dirs):
         axes[1, 1].set_xlabel('Update Step')
         axes[1, 1].set_ylabel('Alpha Value')
         axes[1, 1].grid(True)
-    
+
+    # Success rate over time
     if eval_data:
         success_rates = [data['success_rate'] for data in eval_data]
         axes[1, 2].plot(eval_episodes, success_rates, marker='o')
@@ -182,6 +192,7 @@ def save_training_log(agent, eval_data, eval_episodes, dirs):
         'training_rewards': agent.episode_rewards,
         'training_lengths': agent.episode_lengths,
         'training_losses': agent.training_losses,
+        'collisions': agent.collisions,
         'evaluation_data': eval_data,
         'evaluation_episodes': eval_episodes
     }
@@ -202,15 +213,15 @@ def main():
     dirs = setup_directories(args.output_dir)
     save_config(args, dirs)
     
-    print(f"🚀 Training SAC agent")
-    print(f"📁 Results will be saved to: {dirs['run']}")
+    print(f"Training SAC agent")
+    print(f"Results will be saved to: {dirs['run']}")
     
     # Setup device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"🔧 Using device: {device}")
+    print(f"Using device: {device}")
     
     # Create environment
-    env = ContinuousEnvironment(enable_gui=not args.no_gui, space_file=args.restaurant)
+    env = ContinuousEnvironment(enable_gui=not args.no_gui, space_file=args.restaurant,table_radius=args.table_radius)
     
     # Get environment dimensions
     obs = env.reset()
@@ -231,7 +242,7 @@ def main():
     )
     
     # Enhanced warmup phase
-    print(f"🔥 Enhanced warmup phase: collecting {args.batch_size * 4} initial experiences...")
+    print(f"Enhanced warmup phase: collecting {args.batch_size * 4} initial experiences...")
     warmup_steps = args.batch_size * 4
     warmup_obs = env.reset()
     successful_episodes = 0
@@ -255,30 +266,35 @@ def main():
         else:
             warmup_obs = next_obs
             
-    print(f"✅ Enhanced warmup completed! Buffer size: {len(agent.memory)}, Successful episodes: {successful_episodes}")
+    print(f"Enhanced warmup completed! Buffer size: {len(agent.memory)}, Successful episodes: {successful_episodes}")
     
     # Load pre-trained model if specified
     if args.load_model:
         agent.load_model(args.load_model)
-        print(f"📂 Loaded pre-trained model from: {args.load_model}")
+        print(f"Loaded pre-trained model from: {args.load_model}")
     
     # Training variables
     eval_data = []
     eval_episodes = []
     best_reward = float('-inf')
     
-    print(f"🏃‍♂️ Starting SAC training for {args.episodes} episodes...")
-    print(f"📊 Evaluation every {args.eval_freq} episodes")
+    print(f"Starting SAC training for {args.episodes} episodes...")
+    print(f"Evaluation every {args.eval_freq} episodes")
     
     # Training loop
     for episode in trange(args.episodes, desc="Training SAC"):
         observation = env.reset()
         episode_reward = 0
         episode_length = 0
+        episode_collisions = 0
         
         for step in range(args.max_steps):
             action = agent.act(observation)
             next_observation, reward, done, info = env.step(int(action))
+            
+            # Track collisions from the info dict
+            if info.get('collision', False):
+                episode_collisions += 1
             
             agent.remember(observation, action, reward, next_observation, done)
             
@@ -304,23 +320,19 @@ def main():
         
         agent.episode_rewards.append(episode_reward)
         agent.episode_lengths.append(episode_length)
+        agent.collisions.append(episode_collisions)
         
         # Evaluation
         if (episode + 1) % args.eval_freq == 0:
-            print(f"\n📈 Evaluating at episode {episode + 1}...")
-            
-            eval_results = run_evaluation(
-                agent, env, args.eval_episodes, args.max_steps, 
-                render=args.render_eval
-            )
-            
+            print(f"\nEvaluating at episode {episode + 1}...")
+            eval_results = run_evaluation(agent, env, args.eval_episodes, args.max_steps, render=args.render_eval)
             eval_data.append(eval_results)
             eval_episodes.append(episode + 1)
             
             # Current temperature value
             current_alpha = agent.log_alpha.exp().item() if agent.auto_temp else agent.alpha
             
-            print(f"📊 Evaluation Results (Episode {episode + 1}):")
+            print(f" Evaluation Results (Episode {episode + 1}):")
             print(f"   Mean Reward: {eval_results['mean_reward']:.2f} ± {eval_results['std_reward']:.2f}")
             print(f"   Mean Length: {eval_results['mean_length']:.1f}")
             print(f"   Success Rate: {eval_results['success_rate']:.2%}")
@@ -333,9 +345,9 @@ def main():
                 best_reward = eval_results['mean_reward']
                 best_model_path = dirs['models'] / 'best_model.pth'
                 agent.save_model(best_model_path)
-                print(f"💾 New best model saved! Reward: {best_reward:.2f}")
+                print(f"New best model saved! Reward: {best_reward:.2f}")
     
-    print(f"\n🎯 Running final evaluation...")
+    print(f"\n Running final evaluation...")
     
     # Final evaluation
     final_eval = run_evaluation(
@@ -343,7 +355,7 @@ def main():
         render=args.render_eval
     )
     
-    print(f"\n🏆 Final SAC Evaluation Results:")
+    print(f"\n Final SAC Evaluation Results:")
     print(f"   Mean Reward: {final_eval['mean_reward']:.2f} ± {final_eval['std_reward']:.2f}")
     print(f"   Mean Length: {final_eval['mean_length']:.1f}")
     print(f"   Success Rate: {final_eval['success_rate']:.2%}")
@@ -351,13 +363,17 @@ def main():
     # Save final model
     final_model_path = dirs['models'] / 'final_model.pth'
     agent.save_model(final_model_path)
-    print(f"💾 Final model saved: {final_model_path}")
+    print(f" Final model saved: {final_model_path}")
+    
+    # Calculate collision statistics for the final report
+    total_collisions = sum(agent.collisions) if agent.collisions else 0
     
     # Save final results
     final_results = {
         'final_evaluation': final_eval,
         'best_evaluation_reward': best_reward,
         'total_episodes': args.episodes,
+        'total_training_collisions': total_collisions,
         'hyperparameters': vars(args)
     }
     
@@ -369,8 +385,8 @@ def main():
     plot_training_progress(agent, eval_data, eval_episodes, dirs)
     save_training_log(agent, eval_data, eval_episodes, dirs)
     
-    print(f"\n✅ SAC training completed!")
-    print(f"📁 All results saved to: {dirs['run']}")
+    print(f"\n SAC training completed!")
+    print(f" All results saved to: {dirs['run']}")
 
 if __name__ == "__main__":
     main() 
