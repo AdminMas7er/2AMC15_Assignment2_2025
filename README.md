@@ -33,6 +33,24 @@ You can also now train agents in continuous 2D restaurant environments using the
    python train.py --agent random_agent --restaurant grid_configs/my_first_restaurant.npz --iter 500
    ```
 
+### train_dqn.py usage for continuous space:
+
+```bash
+usage: train_dqn.py --restaurant RESTAURANT [--episodes EPISODES]
+                    [--no_gui] [--seed SEED]
+                    [--load_model PATH] [--demo]
+
+Train agent in a continuous restaurant space.
+
+options:
+  --restaurant RESTAURANT Path to the .npz restaurant layout
+  --episodes EPISODES             Number of training episodes (default: 100)
+  --no_gui                Disables GUI rendering
+  --seed SEED             Random seed (default: 42)
+  --load_model PATH         Path to a saved model to resume training or run demo
+  --demo                    Run in demo mode (no exploration)
+```
+
 ### train.py usage for continuous space:
 
 ```bash
