@@ -7,7 +7,7 @@ This repository (https://github.com/AdminMas7er/2AMC15_Assignment2_2025) contain
 ## Quickstart Guide
 
 ### 1. Set up environment
-We recommend a conda Python ≥ 3.10 installation (tested with 3.11):
+We recommend a conda Python ≥ 3.10 installation (tested with 3.11), run the following with a terminal (dependent on OS) opened in the directory containing this file:
 
 ```bash
 conda create -n dic2025_2 python=3.11
