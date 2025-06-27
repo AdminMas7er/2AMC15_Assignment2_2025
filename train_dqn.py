@@ -25,9 +25,11 @@ def parse_args() -> ArgumentParser:
                    default=Path("grid_configs/my_first_restaurant.npz"))
     p.add_argument("--episodes", type=int, default=100)
     p.add_argument("--seed", type=int, default=42)
+    p.add_argument("--table_radius", type=float, default=0.5)
+    p.add_argument("--learning_rate", type=float, default=3e-4)
     p.add_argument("--no_gui", action="store_true")
     p.add_argument("--load_model", type=Path)
-    p.add_argument("--demo", action="store_true")
+    p.add_argument("--demo_mode", action="store_true",help="Run in demo mode (no training, just testing)")
     return p.parse_args()
 
 # ---------------------------------------------------------------------- #
@@ -50,6 +52,7 @@ def main() -> None:
         space_file=args.restaurant,
         enable_gui=not args.no_gui,
         seed=args.seed,
+        table_radius=args.table_radius,
     )
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -71,15 +74,15 @@ def main() -> None:
         epsilon_end     = 0.05,
         epsilon_decay   = 0.999,
         buffer_size     = 100_000,
-        learning_rate   = 2e-4,
+        learning_rate   = args.learning_rate,
         device          = device,
         seed            = args.seed,
     )
-
+   
     if args.load_model:
         agent.load(args.load_model)
-    if args.demo:
-        agent.epsilon = 0.0
+    if args.demo_mode:
+         args.episodes=args.episodes+50
 
     # ------------------------------------------------------------------ #
     #  CSV logger
@@ -104,9 +107,11 @@ def main() -> None:
 
     rewards, lengths, succ_flags = [], [], []
     obs = env.reset()
-
     with trange(args.episodes, desc="Episodes") as pbar:
         for ep in pbar:
+            agent.set_train_flag(True)
+            if args.demo_mode and ep >= args.episodes - 50:
+                agent.set_train_flag(False)
             max_steps = MAX_STEPS_LONG if ep < 60 else MAX_STEPS_SHORT
             ep_r, ep_len, done = 0.0, 0, False
             deliveries_before = env.deliveries_done
