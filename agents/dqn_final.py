@@ -67,10 +67,13 @@ class DQNAgent:
         self.target_network = DQN_Network(state_size, action_size).to(self.device)
         self.target_network.load_state_dict(self.q_network.state_dict())
         self.target_network.eval()
+        self.train_flag=True
+        self.q_network.train()
         self.optimizer = optim.Adam(self.q_network.parameters(), lr=learning_rate)
         self.replay_buffer = ReplayBuffer(buffer_size, batch_size)
         self.train_step = 0
         self.map_range = np.array([map_width, map_height], dtype=np.float32)
+        
         
     def state_to_vector(self, obs: dict | None):
         if obs is None:  # terminal placeholder
@@ -97,27 +100,37 @@ class DQNAgent:
     #  epsilon‑greedy action
     # -------------------------------------------
     def action(self, state: dict):
-        eps = self.epsilon  # use current epsilon
-
+        eps = self.epsilon  if self.train_flag else 0.0
         if random.random() < eps:
             return random.randrange(self.action_size)
         state_v = torch.as_tensor(self.state_to_vector(state), device=self.device).unsqueeze(0)
         with torch.no_grad():
             q_vals = self.q_network(state_v)
         return int(q_vals.argmax(dim=1).item())
-
+    def set_train_flag(self,flag:bool):
+        self.train_flag = flag
+        if flag:
+            self.q_network.train()
+        else:
+            self.q_network.eval()
     # -------------------------------------------
     #  store transition & train
     # -------------------------------------------
     def observe(self, s, a, r, s2, done):
-        self.replay_buffer.store(
+        if self.train_flag:
+            self.replay_buffer.store(
             self.state_to_vector(s),
             a,
             r,
             self.state_to_vector(s2),
             float(done),
         )
-        self.optimize()
+            self.optimize()
+            self.epsilon = max(
+                self.epsilon * self.epsilon_decay, self.epsilon_end
+            )
+           
+        
 
     # -------------------------------------------
     #  optimize single batch
