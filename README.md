@@ -71,24 +71,18 @@ options:
 
 ## SAC (Soft Actor-Critic) Agent Training
 
-This repository includes a high-performance SAC implementation specifically designed for the continuous restaurant delivery environment. SAC offers superior sample efficiency and stability compared to other algorithms.
+### Quick Start
 
-### Quick Start with SAC
+```bash
+# Basic training
+python train_sac.py --episodes 100 --max_steps 300 --eval_freq 25 --no_gui
 
-1. **Basic Training** (recommended settings):
-   ```bash
-   python train_sac.py --episodes 100 --max_steps 300 --eval_freq 25 --no_gui
-   ```
+# Training with visualization
+python train_sac.py --episodes 100 --max_steps 300 --eval_freq 25
 
-2. **Training with GUI** (to visualize the learning process):
-   ```bash
-   python train_sac.py --episodes 100 --max_steps 300 --eval_freq 25
-   ```
-
-3. **Extended Training** (for better performance):
-   ```bash
-   python train_sac.py --episodes 200 --max_steps 500 --eval_freq 50 --no_gui
-   ```
+# Test trained model
+python train_sac.py --load_model results/sac_training_TIMESTAMP/models/best_model.pth --episodes 10
+```
 
 ### SAC Training Options
 
@@ -121,63 +115,11 @@ SAC Hyperparameters:
   --hidden_size HIDDEN_SIZE   Neural network hidden layer size (default: 512)
 ```
 
-### Understanding SAC Results
+### Results
 
-After training, results are saved in a timestamped directory (e.g., `results/sac_training_20241227_143022/`):
+Training results are saved in `results/sac_training_TIMESTAMP/` with models, plots, and logs. Key metrics include success rate, mean reward, and episode length.
 
-**Directory Structure:**
-```
-results/sac_training_TIMESTAMP/
-├── models/
-│   ├── best_model.pth          # Best performing model during training
-│   └── final_model.pth         # Final model at end of training
-├── plots/
-│   └── sac_training_progress.png  # Training curves and metrics
-└── logs/
-    ├── config.json             # Training configuration
-    ├── training_log.json       # Detailed training data
-    └── final_results.json      # Summary of final performance
-```
 
-**Key Performance Metrics:**
-- **Success Rate**: Percentage of episodes where the agent successfully delivered orders
-- **Mean Reward**: Average reward per episode (higher is better)
-- **Mean Length**: Average number of steps per episode (lower indicates efficiency)
-- **Temperature (α)**: SAC's exploration parameter (automatically tuned)
-
-### Loading and Testing Trained Models
-
-1. **Test a trained model**:
-   ```bash
-   python train_sac.py --load_model results/sac_training_TIMESTAMP/models/best_model.pth --episodes 50 --no_gui
-   ```
-
-2. **Visualize trained model performance**:
-   ```bash
-   python train_sac.py --load_model results/sac_training_TIMESTAMP/models/best_model.pth --episodes 10 --render_eval
-   ```
-
-### SAC Implementation Features
-
-- **Enhanced State Representation**: 26-dimensional state vector including position, heading, target information, spatial awareness, and navigation features
-- **Prioritized Experience Replay**: Successful experiences are given higher sampling priority for improved learning
-- **Automatic Temperature Tuning**: Exploration-exploitation balance is automatically optimized
-- **Gradient Clipping**: Ensures stable training by preventing gradient explosions
-- **Learning Rate Scheduling**: Gradual learning rate decay for stable convergence
-
-### Troubleshooting
-
-**Common Issues:**
-
-1. **Low Success Rate**: Try increasing `--episodes` or adjusting `--lr` (e.g., `--lr 3e-4`)
-2. **Training Too Slow**: Use `--no_gui` and reduce `--eval_freq`
-3. **Unstable Learning**: Decrease learning rate `--lr 1e-4` or increase `--batch_size 256`
-
-**Performance Tips:**
-- Use `--no_gui` for faster training
-- Start with default hyperparameters before tuning
-- Monitor the temperature (α) value - it should decrease during training
-- Success rates typically improve after 50-75 episodes
 
 ---
 
